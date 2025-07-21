@@ -1,0 +1,307 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// User model for authentication and customer management
+model User {
+    id        String   @id @default(cuid())
+    email     String   @unique
+    password  String
+    name      String
+    role      UserRole @default(USER)
+    isActive  Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    subscriptions Subscription[]
+    webhooks      Webhook[]
+
+    @@map("users")
+}
+
+// Service catalog - available services (N8N, Ghost, WordPress, etc.)
+model ServiceCatalog {
+    id          String  @id @default(cuid())
+    name        String  @unique // e.g., "n8n", "ghost", "wordpress"
+    displayName String // e.g., "N8N Workflow Automation"
+    description String
+    version     String  @default("latest")
+    isActive    Boolean @default(true)
+
+    // Resource specifications
+    cpuRequest String @default("0.25") // 0.25 vCPU
+    cpuLimit   String @default("1") // 1 vCPU
+    memRequest String @default("512Mi") // 512MB
+    memLimit   String @default("1Gi") // 1GB
+
+    // Pricing (for future use)
+    monthlyPrice Decimal @default(0) // Free for now
+
+    // Template configuration
+    dockerImage     String
+    containerPort   Int    @default(80)
+    environmentVars Json? // Environment variables as JSON
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    subscriptions Subscription[]
+
+    @@map("service_catalog")
+}
+
+// Customer subscriptions
+model Subscription {
+    id        String             @id @default(cuid())
+    userId    String
+    serviceId String
+    status    SubscriptionStatus @default(ACTIVE)
+
+    // Subscription lifecycle
+    startDate DateTime @default(now())
+    expiresAt DateTime // 30 days from start
+
+    // Service instance details
+    subdomain String? @unique // customer-id.service.domain.com
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+    service         ServiceCatalog   @relation(fields: [serviceId], references: [id])
+    serviceInstance ServiceInstance?
+    transactions    Transaction[]
+    usageMetrics    UsageMetric[]
+
+    @@map("subscriptions")
+}
+
+// Running service instances (pods)
+model ServiceInstance {
+    id             String @id @default(cuid())
+    subscriptionId String @unique
+
+    // Kubernetes details
+    podName   String    @unique
+    namespace String
+    status    PodStatus @default(PENDING)
+
+    // Access details
+    internalUrl String? // Internal cluster URL
+    externalUrl String? // Public access URL
+    credentials Json? // Generated credentials as JSON
+
+    // Resource allocation
+    cpuAllocated String @default("1") // 1 vCPU
+    memAllocated String @default("1Gi") // 1GB
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+    @@map("service_instances")
+}
+
+// Usage metrics for billing and monitoring
+model UsageMetric {
+    id             String @id @default(cuid())
+    subscriptionId String
+
+    // Metrics
+    cpuUsage     Decimal @default(0) // CPU usage in cores
+    memUsage     Decimal @default(0) // Memory usage in MB
+    storageUsage Decimal @default(0) // Storage usage in MB
+    networkIn    Decimal @default(0) // Network ingress in MB
+    networkOut   Decimal @default(0) // Network egress in MB
+
+    // Timestamp
+    recordedAt DateTime @default(now())
+
+    // Relations
+    subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+    @@map("usage_metrics")
+}
+
+// Transaction history for billing
+model Transaction {
+    id             String @id @default(cuid())
+    subscriptionId String
+
+    // Transaction details
+    type        TransactionType
+    amount      Decimal           @default(0)
+    currency    String            @default("IDR")
+    status      TransactionStatus @default(PENDING)
+    description String?
+
+    // Payment gateway details
+    paymentId     String? // External payment ID
+    paymentMethod String? // e.g., "credit_card", "bank_transfer"
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+    @@map("transactions")
+}
+
+// Webhook configurations
+model Webhook {
+    id     String @id @default(cuid())
+    userId String
+
+    // Webhook details
+    url      String
+    events   String[] // Array of event types to listen for
+    secret   String // HMAC secret for signature validation
+    isActive Boolean  @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+    deliveries WebhookDelivery[]
+
+    @@map("webhooks")
+}
+
+// Webhook delivery tracking
+model WebhookDelivery {
+    id        String @id @default(cuid())
+    webhookId String
+
+    // Delivery details
+    eventType    String
+    payload      Json
+    status       WebhookStatus @default(PENDING)
+    attempts     Int           @default(0)
+    lastAttempt  DateTime?
+    responseCode Int?
+    responseBody String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+    @@map("webhook_deliveries")
+}
+
+// Worker nodes information (for monitoring)
+model WorkerNode {
+    id        String @id @default(cuid())
+    name      String @unique // "worker-1", "worker-2"
+    hostname  String @unique
+    ipAddress String
+
+    // Node Specifications
+    architecture    String @default("amd64") // "amd64", "arm64"
+    operatingSystem String @default("linux")
+
+    // Hardware Resources
+    cpuCores        Int // Total CPU cores
+    cpuArchitecture String // "Ryzen 6900HS", "Intel i7 Gen7"
+    totalMemory     String // "32Gi", "64Gi"
+    totalStorage    String // Available storage
+
+    // Resource Allocation
+    allocatedCPU     String @default("0") // Currently allocated CPU
+    allocatedMemory  String @default("0") // Currently allocated memory
+    allocatedStorage String @default("0") // Currently allocated storage
+
+    // Capacity Management
+    maxPods     Int @default(30) // Maximum pods per node
+    currentPods Int @default(0) // Current pod count
+
+    // Node Status
+    status        NodeStatus @default(PENDING)
+    isReady       Boolean    @default(false)
+    isSchedulable Boolean    @default(true)
+
+    // Health & Monitoring
+    lastHeartbeat   DateTime?
+    lastHealthCheck DateTime?
+
+    // Kubernetes Labels and Taints
+    labels Json? // Node labels as JSON
+    taints Json? // Node taints as JSON
+
+    // Additional Metadata
+    kubeletVersion   String? // Kubernetes version
+    containerRuntime String? // "containerd", "docker"
+    kernelVersion    String?
+    osImage          String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("worker_nodes")
+}
+
+// Enums
+enum UserRole {
+    USER
+    ADMINISTRATOR
+}
+
+enum SubscriptionStatus {
+    ACTIVE
+    EXPIRED
+    CANCELLED
+    SUSPENDED
+}
+
+enum PodStatus {
+    PENDING
+    RUNNING
+    FAILED
+    SUCCEEDED
+    UNKNOWN
+}
+
+enum TransactionType {
+    SUBSCRIPTION
+    RENEWAL
+    REFUND
+    CREDIT
+}
+
+enum TransactionStatus {
+    PENDING
+    COMPLETED
+    FAILED
+    CANCELLED
+}
+
+enum WebhookStatus {
+    PENDING
+    DELIVERED
+    FAILED
+    RETRYING
+}
+
+enum NodeStatus {
+    PENDING
+    ACTIVE
+    INACTIVE
+    MAINTENANCE
+    NOT_READY
+}

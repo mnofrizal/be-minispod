@@ -1,0 +1,207 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@contentType = application/json
+
+### Health Check
+GET http://localhost:3000/health
+
+###
+
+### Register New User
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "password": "SecurePass123!",
+  "confirmPassword": "SecurePass123!"
+}
+
+###
+
+### Login User
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "john.doe@example.com",
+  "password": "SecurePass123!"
+}
+
+###
+
+### Login Admin User (from seed data)
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+###
+
+### Login Regular User (from seed data)
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "customer@test.local",
+  "password": "Customer123!@#"
+}
+
+###
+
+### Get User Profile (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+GET {{baseUrl}}/auth/profile
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+###
+
+### Update User Profile (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+PUT {{baseUrl}}/auth/profile
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+{
+  "name": "John Doe Updated"
+}
+
+###
+
+### Change Password (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+POST {{baseUrl}}/auth/change-password
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+{
+  "currentPassword": "SecurePass123!",
+  "newPassword": "NewSecurePass123!",
+  "confirmPassword": "NewSecurePass123!"
+}
+
+###
+
+### Refresh Token
+POST {{baseUrl}}/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "YOUR_REFRESH_TOKEN"
+}
+
+###
+
+### Check Authentication Status (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+GET {{baseUrl}}/auth/me
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+###
+
+### Logout (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+###
+
+### Deactivate Account (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+DELETE {{baseUrl}}/auth/account
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+###
+
+### Get Service Catalog (public endpoint)
+GET {{baseUrl}}/services
+
+###
+
+### Get Service Details (public endpoint)
+GET {{baseUrl}}/services/n8n-service
+
+###
+
+### Get User Subscriptions (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+GET {{baseUrl}}/subscriptions
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+###
+
+### Create New Subscription (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+POST {{baseUrl}}/subscriptions
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+{
+  "serviceId": "n8n-service"
+}
+
+###
+
+### Get User Pods (requires authentication)
+# Replace YOUR_ACCESS_TOKEN with actual token from login response
+GET {{baseUrl}}/pods
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+###
+
+### Get All Users (admin only)
+# Replace YOUR_ADMIN_ACCESS_TOKEN with actual admin token from login response
+GET {{baseUrl}}/users
+Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN
+
+###
+
+### Test Invalid Endpoint (404 error)
+GET {{baseUrl}}/invalid-endpoint
+
+###
+
+### Test Rate Limiting (send multiple requests quickly)
+GET {{baseUrl}}/services
+GET {{baseUrl}}/services
+GET {{baseUrl}}/services
+GET {{baseUrl}}/services
+GET {{baseUrl}}/services
+
+###
+
+### Test Validation Error (missing required fields)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "name": "",
+  "email": "invalid-email",
+  "password": "123"
+}
+
+###
+
+### Test Authentication Error (invalid credentials)
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "nonexistent@example.com",
+  "password": "wrongpassword"
+}
+
+###
+
+### Test Unauthorized Access (no token)
+GET {{baseUrl}}/auth/profile
+
+###
+
+### Test Invalid Token
+GET {{baseUrl}}/auth/profile
+Authorization: Bearer invalid_token_here

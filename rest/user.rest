@@ -1,0 +1,96 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@contentType = application/json
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkYWsyNWIwMDAxMTRjZWc5cGk0NnA2IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMTEzNTg1LCJleHAiOjE3NTMxOTk5ODUsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.olXLvIPaKwXn_MT-3GLdho6W9GNVhIZ4BW6HAypwY8A
+
+### ========================================
+### ADMIN LOGIN (Get Token First)
+### ========================================
+
+### Login Admin User (to get admin token)
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+###
+
+### ========================================
+### USER MANAGEMENT ENDPOINTS (Admin Only)
+### ========================================
+
+### Get All Users
+# Replace YOUR_ADMIN_TOKEN with actual admin token from login response
+GET {{baseUrl}}/users
+Authorization: Bearer {{adminToken}}
+###
+
+### Get User Statistics
+GET {{baseUrl}}/users/stats
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Get User by ID
+# Replace USER_ID with actual user ID
+GET {{baseUrl}}/users/USER_ID
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### Create New User
+POST {{baseUrl}}/users
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "name": "Test User",
+  "email": "testuser@example.com",
+  "password": "TestPass123!@#",
+  "role": "USER"
+}
+
+###
+
+### Update User
+# Replace USER_ID with actual user ID
+PUT {{baseUrl}}/users/USER_ID
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "name": "Updated User Name",
+  "role": "USER",
+  "isActive": true
+}
+
+###
+
+### Change User Password
+# Replace USER_ID with actual user ID
+PATCH {{baseUrl}}/users/USER_ID/password
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "newPassword": "NewPassword123!@#"
+}
+
+###
+
+### Toggle User Status
+# Replace USER_ID with actual user ID
+PATCH {{baseUrl}}/users/USER_ID/toggle-status
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### Delete User
+# Replace USER_ID with actual user ID
+DELETE {{baseUrl}}/users/USER_ID
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###

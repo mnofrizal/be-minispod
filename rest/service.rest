@@ -1,0 +1,200 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@contentType = application/json
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkYWsyNWIwMDAxMTRjZWc5cGk0NnA2IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMTEzNTg1LCJleHAiOjE3NTMxOTk5ODUsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.olXLvIPaKwXn_MT-3GLdho6W9GNVhIZ4BW6HAypwY8A
+
+### ========================================
+### ADMIN LOGIN (Get Token First)
+### ========================================
+
+### Login Admin User (to get admin token)
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+###
+
+### ========================================
+### PUBLIC SERVICE CATALOG ENDPOINTS
+### ========================================
+
+### Get Active Services (Public)
+GET {{baseUrl}}/services
+
+###
+
+### Get Service by Name (Public)
+GET {{baseUrl}}/services/n8n
+
+###
+
+### ========================================
+### ADMIN SERVICE MANAGEMENT ENDPOINTS
+### ========================================
+
+### Get All Services (Admin)
+# Replace YOUR_ADMIN_TOKEN with actual admin token from login response
+GET {{baseUrl}}/services/admin
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Get All Services with Pagination (Admin)
+GET {{baseUrl}}/services/admin?page=1&limit=5
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### Get Services with Filtering (Admin)
+GET {{baseUrl}}/services/admin?isActive=true&search=n8n
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### Get Service Statistics (Admin)
+GET {{baseUrl}}/services/admin/stats
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### Get Service by ID (Admin)
+# Replace SERVICE_ID with actual service ID
+GET {{baseUrl}}/services/admin/SERVICE_ID
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### Create New Service (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "name": "ghost",
+  "displayName": "Ghost CMS",
+  "description": "Modern publishing platform for creating blogs and websites with a beautiful interface.",
+  "version": "latest",
+  "isActive": true,
+  "cpuRequest": "0.25",
+  "cpuLimit": "1",
+  "memRequest": "512Mi",
+  "memLimit": "1Gi",
+  "monthlyPrice": 0,
+  "dockerImage": "ghost:latest",
+  "containerPort": 2368,
+  "environmentVars": {
+    "NODE_ENV": "production",
+    "url": "http://localhost:2368"
+  }
+}
+
+###
+
+### Create WordPress Service (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "name": "wordpress",
+  "displayName": "WordPress",
+  "description": "Popular content management system for creating websites and blogs with thousands of themes and plugins.",
+  "version": "latest",
+  "isActive": true,
+  "cpuRequest": "0.5",
+  "cpuLimit": "1",
+  "memRequest": "512Mi",
+  "memLimit": "1Gi",
+  "monthlyPrice": 0,
+  "dockerImage": "wordpress:latest",
+  "containerPort": 80,
+  "environmentVars": {
+    "WORDPRESS_DB_HOST": "mysql:3306",
+    "WORDPRESS_DB_NAME": "wordpress"
+  }
+}
+
+###
+
+### Update Service (Admin)
+# Replace SERVICE_ID with actual service ID
+PUT {{baseUrl}}/services/SERVICE_ID
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "displayName": "Updated Service Name",
+  "description": "Updated service description with more details.",
+  "version": "v2.0",
+  "isActive": true,
+  "monthlyPrice": 10
+}
+
+###
+
+### Toggle Service Status (Admin)
+# Replace SERVICE_ID with actual service ID
+PATCH {{baseUrl}}/services/SERVICE_ID/toggle-status
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### Delete Service (Admin)
+# Replace SERVICE_ID with actual service ID
+DELETE {{baseUrl}}/services/SERVICE_ID
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+###
+
+### ========================================
+### SERVICE MANAGEMENT ERROR TESTS
+### ========================================
+
+### Test Create Service with Invalid Data (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "name": "",
+  "displayName": "",
+  "description": "short",
+  "dockerImage": "",
+  "containerPort": 70000
+}
+
+###
+
+### Test Create Service with Existing Name (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer YOUR_ADMIN_TOKEN
+
+{
+  "name": "n8n",
+  "displayName": "Duplicate N8N",
+  "description": "This should fail because n8n already exists",
+  "dockerImage": "n8nio/n8n:latest"
+}
+
+###
+
+### Test Get Non-existent Service
+GET {{baseUrl}}/services/non-existent-service
+
+###
+
+### Test Admin Endpoints without Token
+GET {{baseUrl}}/services/admin
+
+###
+
+### Test Admin Endpoints with Invalid Token
+GET {{baseUrl}}/services/admin
+Authorization: Bearer invalid_token_here
+
+###
