@@ -22,8 +22,12 @@ model User {
     updatedAt DateTime @updatedAt
 
     // Relations
-    subscriptions Subscription[]
-    webhooks      Webhook[]
+    subscriptions       Subscription[]
+    webhooks            Webhook[]
+    balance             UserBalance?
+    topUpTransactions   TopUpTransaction[]
+    invoices            Invoice[]
+    balanceTransactions BalanceTransaction[]
 
     @@map("users")
 }
@@ -83,6 +87,7 @@ model Subscription {
     serviceInstance ServiceInstance?
     transactions    Transaction[]
     usageMetrics    UsageMetric[]
+    invoice         Invoice?
 
     @@map("subscriptions")
 }
@@ -256,10 +261,142 @@ model WorkerNode {
     @@map("worker_nodes")
 }
 
+// User balance management
+model UserBalance {
+    id        String   @id @default(cuid())
+    userId    String   @unique
+    balance   Decimal  @default(0) @db.Decimal(10, 2)
+    currency  String   @default("IDR")
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@map("user_balances")
+}
+
+// Top-up transactions with Midtrans integration
+model TopUpTransaction {
+    id       String      @id @default(cuid())
+    userId   String
+    amount   Decimal     @db.Decimal(10, 2)
+    currency String      @default("IDR")
+    status   TopUpStatus @default(PENDING)
+
+    // Midtrans integration fields
+    orderId       String  @unique // Midtrans order ID
+    snapToken     String? // Midtrans Snap token
+    paymentType   String? // credit_card, bank_transfer, etc.
+    transactionId String? // Midtrans transaction ID
+
+    // Payment details
+    paidAt    DateTime?
+    expiredAt DateTime // Payment expiry (24 hours)
+
+    // Midtrans response data
+    midtransData Json? // Store full Midtrans response
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    invoice Invoice?
+
+    @@map("topup_transactions")
+}
+
+// Invoice generation for top-ups and subscriptions
+model Invoice {
+    id            String      @id @default(cuid())
+    invoiceNumber String      @unique // INV-2024-001
+    userId        String
+    type          InvoiceType // TOPUP, SUBSCRIPTION
+
+    // Invoice details
+    amount   Decimal       @db.Decimal(10, 2)
+    currency String        @default("IDR")
+    status   InvoiceStatus @default(DRAFT)
+
+    // Reference IDs
+    topUpTransactionId String? @unique
+    subscriptionId     String? @unique
+
+    // Invoice metadata
+    description String
+    dueDate     DateTime
+    paidAt      DateTime?
+
+    // PDF generation
+    pdfPath       String? // Path to generated PDF
+    downloadCount Int     @default(0)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+    topUpTransaction TopUpTransaction? @relation(fields: [topUpTransactionId], references: [id])
+    subscription     Subscription?     @relation(fields: [subscriptionId], references: [id])
+
+    @@map("invoices")
+}
+
+// Balance transaction history
+model BalanceTransaction {
+    id            String                 @id @default(cuid())
+    userId        String
+    type          BalanceTransactionType
+    amount        Decimal                @db.Decimal(10, 2)
+    balanceBefore Decimal                @db.Decimal(10, 2)
+    balanceAfter  Decimal                @db.Decimal(10, 2)
+    description   String
+
+    // Reference IDs
+    topUpTransactionId String?
+    subscriptionId     String?
+
+    createdAt DateTime @default(now())
+
+    // Relations
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@map("balance_transactions")
+}
+
 // Enums
 enum UserRole {
     USER
     ADMINISTRATOR
+}
+
+enum TopUpStatus {
+    PENDING
+    PAID
+    EXPIRED
+    CANCELLED
+    FAILED
+}
+
+enum InvoiceType {
+    TOPUP
+    SUBSCRIPTION
+}
+
+enum InvoiceStatus {
+    DRAFT
+    SENT
+    PAID
+    OVERDUE
+    CANCELLED
+}
+
+enum BalanceTransactionType {
+    CREDIT // Top-up
+    DEBIT // Subscription purchase
+    REFUND // Refund credit
+    ADJUSTMENT // Manual adjustment
 }
 
 enum SubscriptionStatus {

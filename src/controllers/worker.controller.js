@@ -1,6 +1,7 @@
 import {
   getAllWorkerNodes,
   getWorkerNodeById,
+  getWorkerNodeByName,
   createWorkerNode,
   updateWorkerNode,
   deleteWorkerNode,
@@ -11,10 +12,12 @@ import {
   getWorkerNodeStats,
   getOnlineWorkerNodes,
   getOfflineWorkerNodes,
+  registerWorkerNode,
 } from "../services/worker.service.js";
 import HTTP_STATUS from "../utils/http-status.util.js";
 import * as responseUtil from "../utils/response.util.js";
 import logger from "../utils/logger.util.js";
+import { resolveIdOrName } from "../utils/validation.util.js";
 
 /**
  * Worker node management controller functions
@@ -85,7 +88,7 @@ const getAllWorkerNodesController = async (req, res) => {
 };
 
 /**
- * Get worker node by ID
+ * Get worker node by ID or name
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
@@ -93,7 +96,15 @@ const getWorkerNodeByIdController = async (req, res) => {
   try {
     const { nodeId } = req.params;
 
-    const workerNode = await getWorkerNodeById(nodeId);
+    // Resolve whether parameter is ID or name
+    const { type, value } = resolveIdOrName(nodeId);
+
+    let workerNode;
+    if (type === "id") {
+      workerNode = await getWorkerNodeById(value);
+    } else {
+      workerNode = await getWorkerNodeByName(value);
+    }
 
     if (!workerNode) {
       return res
@@ -107,7 +118,9 @@ const getWorkerNodeByIdController = async (req, res) => {
         );
     }
 
-    logger.info(`Admin retrieved worker node: ${workerNode.name}`);
+    logger.info(
+      `Admin retrieved worker node: ${workerNode.name} (${type}: ${value})`
+    );
 
     res
       .status(HTTP_STATUS.OK)
@@ -174,7 +187,7 @@ const createWorkerNodeController = async (req, res) => {
 };
 
 /**
- * Update worker node
+ * Update worker node by ID or name
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
@@ -183,9 +196,32 @@ const updateWorkerNodeController = async (req, res) => {
     const { nodeId } = req.params;
     const updateData = req.body;
 
-    const updatedWorkerNode = await updateWorkerNode(nodeId, updateData);
+    // Resolve whether parameter is ID or name
+    const { type, value } = resolveIdOrName(nodeId);
 
-    logger.info(`Admin updated worker node: ${updatedWorkerNode.name}`);
+    let updatedWorkerNode;
+    if (type === "id") {
+      updatedWorkerNode = await updateWorkerNode(value, updateData);
+    } else {
+      // First get the worker node by name to get its ID
+      const workerNode = await getWorkerNodeByName(value);
+      if (!workerNode) {
+        return res
+          .status(HTTP_STATUS.NOT_FOUND)
+          .json(
+            responseUtil.error(
+              "Worker node not found",
+              "WORKER_NODE_NOT_FOUND",
+              HTTP_STATUS.NOT_FOUND
+            )
+          );
+      }
+      updatedWorkerNode = await updateWorkerNode(workerNode.id, updateData);
+    }
+
+    logger.info(
+      `Admin updated worker node: ${updatedWorkerNode.name} (${type}: ${value})`
+    );
 
     res
       .status(HTTP_STATUS.OK)
@@ -223,7 +259,7 @@ const updateWorkerNodeController = async (req, res) => {
 };
 
 /**
- * Delete worker node
+ * Delete worker node by ID or name
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
@@ -231,9 +267,32 @@ const deleteWorkerNodeController = async (req, res) => {
   try {
     const { nodeId } = req.params;
 
-    const deletedWorkerNode = await deleteWorkerNode(nodeId);
+    // Resolve whether parameter is ID or name
+    const { type, value } = resolveIdOrName(nodeId);
 
-    logger.info(`Admin deleted worker node: ${deletedWorkerNode.name}`);
+    let deletedWorkerNode;
+    if (type === "id") {
+      deletedWorkerNode = await deleteWorkerNode(value);
+    } else {
+      // First get the worker node by name to get its ID
+      const workerNode = await getWorkerNodeByName(value);
+      if (!workerNode) {
+        return res
+          .status(HTTP_STATUS.NOT_FOUND)
+          .json(
+            responseUtil.error(
+              "Worker node not found",
+              "WORKER_NODE_NOT_FOUND",
+              HTTP_STATUS.NOT_FOUND
+            )
+          );
+      }
+      deletedWorkerNode = await deleteWorkerNode(workerNode.id);
+    }
+
+    logger.info(
+      `Admin deleted worker node: ${deletedWorkerNode.name} (${type}: ${value})`
+    );
 
     res
       .status(HTTP_STATUS.OK)
@@ -271,18 +330,43 @@ const deleteWorkerNodeController = async (req, res) => {
 };
 
 /**
- * Toggle worker node schedulable status
+ * Toggle worker node schedulable status by ID or name
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 const toggleNodeSchedulableController = async (req, res) => {
   try {
     const { nodeId } = req.params;
+    const { schedulable } = req.body;
 
-    const updatedWorkerNode = await toggleNodeSchedulable(nodeId);
+    // Resolve whether parameter is ID or name
+    const { type, value } = resolveIdOrName(nodeId);
+
+    let updatedWorkerNode;
+    if (type === "id") {
+      updatedWorkerNode = await toggleNodeSchedulable(value, schedulable);
+    } else {
+      // First get the worker node by name to get its ID
+      const workerNode = await getWorkerNodeByName(value);
+      if (!workerNode) {
+        return res
+          .status(HTTP_STATUS.NOT_FOUND)
+          .json(
+            responseUtil.error(
+              "Worker node not found",
+              "WORKER_NODE_NOT_FOUND",
+              HTTP_STATUS.NOT_FOUND
+            )
+          );
+      }
+      updatedWorkerNode = await toggleNodeSchedulable(
+        workerNode.id,
+        schedulable
+      );
+    }
 
     logger.info(
-      `Admin toggled schedulable status for worker node: ${updatedWorkerNode.name} - Schedulable: ${updatedWorkerNode.isSchedulable}`
+      `Admin updated schedulable status for worker node: ${updatedWorkerNode.name} - Schedulable: ${updatedWorkerNode.isSchedulable} (${type}: ${value})`
     );
 
     res
@@ -323,7 +407,7 @@ const toggleNodeSchedulableController = async (req, res) => {
 };
 
 /**
- * Update worker node status
+ * Update worker node status by ID or name
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
@@ -332,10 +416,31 @@ const updateNodeStatusController = async (req, res) => {
     const { nodeId } = req.params;
     const { status } = req.body;
 
-    const updatedWorkerNode = await updateNodeStatus(nodeId, status);
+    // Resolve whether parameter is ID or name
+    const { type, value } = resolveIdOrName(nodeId);
+
+    let updatedWorkerNode;
+    if (type === "id") {
+      updatedWorkerNode = await updateNodeStatus(value, status);
+    } else {
+      // First get the worker node by name to get its ID
+      const workerNode = await getWorkerNodeByName(value);
+      if (!workerNode) {
+        return res
+          .status(HTTP_STATUS.NOT_FOUND)
+          .json(
+            responseUtil.error(
+              "Worker node not found",
+              "WORKER_NODE_NOT_FOUND",
+              HTTP_STATUS.NOT_FOUND
+            )
+          );
+      }
+      updatedWorkerNode = await updateNodeStatus(workerNode.id, status);
+    }
 
     logger.info(
-      `Admin updated worker node status: ${updatedWorkerNode.name} - Status: ${updatedWorkerNode.status}`
+      `Admin updated worker node status: ${updatedWorkerNode.name} - Status: ${updatedWorkerNode.status} (${type}: ${value})`
     );
 
     res
@@ -380,9 +485,37 @@ const updateNodeStatusController = async (req, res) => {
  */
 const updateNodeHeartbeatController = async (req, res) => {
   try {
-    const { nodeId } = req.params;
+    const { nodeId, nodeName } = req.params;
+    const heartbeatData = req.body;
 
-    const updatedWorkerNode = await updateNodeHeartbeat(nodeId);
+    // Use nodeId if available, otherwise use nodeName
+    const identifier = nodeId || nodeName;
+
+    // Resolve whether parameter is ID or name
+    const { type, value } = resolveIdOrName(identifier);
+
+    let updatedWorkerNode;
+    if (type === "id") {
+      updatedWorkerNode = await updateNodeHeartbeat(value, heartbeatData);
+    } else {
+      // First get the worker node by name to get its ID
+      const workerNode = await getWorkerNodeByName(value);
+      if (!workerNode) {
+        return res
+          .status(HTTP_STATUS.NOT_FOUND)
+          .json(
+            responseUtil.error(
+              `Worker node not found: ${value}`,
+              "WORKER_NODE_NOT_FOUND",
+              HTTP_STATUS.NOT_FOUND
+            )
+          );
+      }
+      updatedWorkerNode = await updateNodeHeartbeat(
+        workerNode.id,
+        heartbeatData
+      );
+    }
 
     res
       .status(HTTP_STATUS.OK)
@@ -394,6 +527,19 @@ const updateNodeHeartbeatController = async (req, res) => {
       );
   } catch (error) {
     logger.error("Error in updateNodeHeartbeatController:", error);
+
+    if (error.code === "WORKER_NODE_NOT_FOUND") {
+      return res
+        .status(HTTP_STATUS.NOT_FOUND)
+        .json(
+          responseUtil.error(
+            "Worker node not found",
+            "WORKER_NODE_NOT_FOUND",
+            HTTP_STATUS.NOT_FOUND
+          )
+        );
+    }
+
     res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
@@ -541,6 +687,75 @@ const getOfflineWorkerNodesController = async (req, res) => {
   }
 };
 
+/**
+ * Register worker node (auto-registration endpoint)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const registerWorkerNodeController = async (req, res) => {
+  try {
+    const nodeData = req.body;
+
+    const registeredWorkerNode = await registerWorkerNode(nodeData);
+
+    logger.info(
+      `Worker node auto-registered: ${registeredWorkerNode.name} (${registeredWorkerNode.ipAddress})`
+    );
+
+    res.status(HTTP_STATUS.CREATED).json(
+      responseUtil.success(
+        {
+          id: registeredWorkerNode.id,
+          name: registeredWorkerNode.name,
+          status: registeredWorkerNode.status,
+          isReady: registeredWorkerNode.isReady,
+          isSchedulable: registeredWorkerNode.isSchedulable,
+        },
+        "Worker node registered successfully"
+      )
+    );
+  } catch (error) {
+    logger.error("Error in registerWorkerNodeController:", error);
+
+    if (error.code === "WORKER_NODE_EXISTS") {
+      return res
+        .status(HTTP_STATUS.CONFLICT)
+        .json(
+          responseUtil.error(
+            "Worker node with this name already exists",
+            "WORKER_NODE_EXISTS",
+            HTTP_STATUS.CONFLICT
+          )
+        );
+    }
+
+    if (error.code === "WORKER_NODE_UPDATED") {
+      return res.status(HTTP_STATUS.OK).json(
+        responseUtil.success(
+          {
+            id: error.data.id,
+            name: error.data.name,
+            status: error.data.status,
+            isReady: error.data.isReady,
+            isSchedulable: error.data.isSchedulable,
+          },
+          "Worker node information updated successfully"
+        )
+      );
+    }
+
+    res
+      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      .json(
+        responseUtil.error(
+          "Failed to register worker node",
+          "INTERNAL_SERVER_ERROR",
+          HTTP_STATUS.INTERNAL_SERVER_ERROR
+        )
+      );
+  }
+};
+
 export {
   getAllWorkerNodesController,
   getWorkerNodeByIdController,
@@ -554,4 +769,5 @@ export {
   getWorkerNodeStatsController,
   getOnlineWorkerNodesController,
   getOfflineWorkerNodesController,
+  registerWorkerNodeController,
 };

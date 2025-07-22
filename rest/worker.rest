@@ -4,7 +4,7 @@
 
 ### Variables
 @baseUrl = http://localhost:3000/api/v1
-@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkYWsyNWIwMDAxMTRjZWc5cGk0NnA2IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMTE5MDU3LCJleHAiOjE3NTMyMDU0NTcsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.7bcoVQdNC5iRzyHlHGq8IltSAugsiGCMdb7-LVpcm2U
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkZTM2NGUwMDAxMTFqNTlvZWZ5cHE3IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMTkxNTk3LCJleHAiOjE3NTMyNzc5OTcsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.-4NoVttDAl0OdAXfU-1USrNfQboAUUYPS2IwwKuW5fc
 @nodeId = worker-node-id-here
 @nodeName = worker-node-name-here
 
@@ -95,15 +95,23 @@ GET {{baseUrl}}/workers?status=ACTIVE&isSchedulable=true&isReady=true&sortBy=nam
 Authorization: Bearer {{adminToken}}
 
 ### ============================================
-### WORKER NODE RETRIEVAL
+### WORKER NODE RETRIEVAL (ID or Name Support)
 ### ============================================
 
-### Get worker node by ID
+### Get worker node by ID (UUID format)
 GET {{baseUrl}}/workers/{{nodeId}}
 Authorization: Bearer {{adminToken}}
 
-### Get worker node by name
-GET {{baseUrl}}/workers/name/{{nodeName}}
+### Get worker node by name (string format)
+GET {{baseUrl}}/workers/k3d-paas-cluster-agent-0
+Authorization: Bearer {{adminToken}}
+
+### Get worker node by name (another example)
+GET {{baseUrl}}/workers/k3d-paas-cluster-agent-1
+Authorization: Bearer {{adminToken}}
+
+### Test with actual k3d worker name
+GET {{baseUrl}}/workers/k3d-paas-cluster-agent-0
 Authorization: Bearer {{adminToken}}
 
 ### ============================================
@@ -334,7 +342,7 @@ Content-Type: application/json
 ### ============================================
 
 ### Delete worker node
-DELETE {{baseUrl}}/workers/{{nodeId}}
+DELETE {{baseUrl}}/workers/k3d-paas-dev-agent-0
 Authorization: Bearer {{adminToken}}
 
 ### ============================================

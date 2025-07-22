@@ -86,4 +86,39 @@ const validate = (schema, property = "body") => {
   };
 };
 
-export { createSubscriptionSchema, paginationSchema, webhookSchema, validate };
+/**
+ * Check if a string is a valid UUID format
+ * @param {string} str - String to check
+ * @returns {boolean} True if string is a valid UUID
+ */
+const isValidUUID = (str) => {
+  if (!str || typeof str !== "string") {
+    return false;
+  }
+
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
+/**
+ * Determine if parameter is an ID (UUID) or name (string)
+ * @param {string} param - Parameter to check
+ * @returns {Object} Object with type and value
+ */
+const resolveIdOrName = (param) => {
+  if (isValidUUID(param)) {
+    return { type: "id", value: param };
+  } else {
+    return { type: "name", value: param };
+  }
+};
+
+export {
+  createSubscriptionSchema,
+  paginationSchema,
+  webhookSchema,
+  validate,
+  isValidUUID,
+  resolveIdOrName,
+};

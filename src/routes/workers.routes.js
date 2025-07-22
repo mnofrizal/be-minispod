@@ -12,6 +12,7 @@ import {
   getWorkerNodeStatsController,
   getOnlineWorkerNodesController,
   getOfflineWorkerNodesController,
+  registerWorkerNodeController,
 } from "../controllers/worker.controller.js";
 import { adminOnly } from "../middleware/auth.middleware.js";
 import {
@@ -21,7 +22,10 @@ import {
   validateUpdateNodeStatus,
   validateWorkerNodeId,
   validateWorkerNodeName,
+  validateWorkerNodeIdOrName,
   validateUpdateNodeResources,
+  validateWorkerRegistration,
+  validateWorkerHeartbeat,
 } from "../validations/worker.validation.js";
 
 const router = express.Router();
@@ -48,11 +52,11 @@ router.get("/online", adminOnly, getOnlineWorkerNodesController);
 // GET /api/workers/offline - Get offline worker nodes
 router.get("/offline", adminOnly, getOfflineWorkerNodesController);
 
-// GET /api/workers/:nodeId - Get worker node by ID
+// GET /api/workers/:nodeId - Get worker node by ID or name
 router.get(
   "/:nodeId",
   adminOnly,
-  validateWorkerNodeId,
+  validateWorkerNodeIdOrName,
   getWorkerNodeByIdController
 );
 
@@ -64,52 +68,69 @@ router.post(
   createWorkerNodeController
 );
 
-// PUT /api/workers/:nodeId - Update worker node
+// PUT /api/workers/:nodeId - Update worker node by ID or name
 router.put(
   "/:nodeId",
   adminOnly,
-  validateWorkerNodeId,
+  validateWorkerNodeIdOrName,
   validateUpdateWorkerNode,
   updateWorkerNodeController
 );
 
-// DELETE /api/workers/:nodeId - Delete worker node
+// DELETE /api/workers/:nodeId - Delete worker node by ID or name
 router.delete(
   "/:nodeId",
   adminOnly,
-  validateWorkerNodeId,
+  validateWorkerNodeIdOrName,
   deleteWorkerNodeController
 );
 
-// PATCH /api/workers/:nodeId/schedulable - Toggle worker node schedulable status
+// PATCH /api/workers/:nodeId/schedulable - Toggle worker node schedulable status by ID or name
 router.patch(
   "/:nodeId/schedulable",
   adminOnly,
-  validateWorkerNodeId,
+  validateWorkerNodeIdOrName,
   toggleNodeSchedulableController
 );
 
-// PATCH /api/workers/:nodeId/status - Update worker node status
+// PATCH /api/workers/:nodeId/status - Update worker node status by ID or name
 router.patch(
   "/:nodeId/status",
   adminOnly,
-  validateWorkerNodeId,
+  validateWorkerNodeIdOrName,
   validateUpdateNodeStatus,
   updateNodeStatusController
 );
 
-// PATCH /api/workers/:nodeId/heartbeat - Update worker node heartbeat (system endpoint)
-router.patch(
-  "/:nodeId/heartbeat",
-  adminOnly,
-  validateWorkerNodeId,
+/**
+ * System Endpoints (No authentication required - called by K8s nodes)
+ */
+
+// POST /api/workers/register - Auto-register worker node
+router.post(
+  "/register",
+  validateWorkerRegistration,
+  registerWorkerNodeController
+);
+
+// PUT /api/workers/:nodeName/heartbeat - Update worker node heartbeat by name
+router.put(
+  "/:nodeName/heartbeat",
+  validateWorkerHeartbeat,
   updateNodeHeartbeatController
 );
 
-// PATCH /api/workers/:nodeId/resources - Update worker node resource allocation (system endpoint)
+// PATCH /api/workers/:nodeId/heartbeat - Update worker node heartbeat by ID
+router.patch(
+  "/:nodeId/heartbeat",
+  validateWorkerNodeId,
+  validateWorkerHeartbeat,
+  updateNodeHeartbeatController
+);
+
+// PATCH /api/workers/:nodeId/resources - Update worker node resource allocation
 router.patch(
   "/:nodeId/resources",
-  adminOnly,
   validateWorkerNodeId,
   validateUpdateNodeResources,
   updateNodeResourcesController

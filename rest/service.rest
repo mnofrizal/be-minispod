@@ -1,7 +1,7 @@
 ### Variables
 @baseUrl = http://localhost:3000/api/v1
 @contentType = application/json
-@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkYWsyNWIwMDAxMTRjZWc5cGk0NnA2IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMTEzNTg1LCJleHAiOjE3NTMxOTk5ODUsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.olXLvIPaKwXn_MT-3GLdho6W9GNVhIZ4BW6HAypwY8A
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkZTM2NGUwMDAxMTFqNTlvZWZ5cHE3IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMjA4MjY2LCJleHAiOjE3NTMyOTQ2NjYsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.kf49QazbsU_GQQoFF0mJNMoTQdh7bFuF_7ZnyRPPG1g
 
 ### ========================================
 ### ADMIN LOGIN (Get Token First)

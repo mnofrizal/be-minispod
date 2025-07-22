@@ -10,13 +10,13 @@
  * @param {number} statusCode - HTTP status code
  * @returns {Object} Formatted success response
  */
-const success = (data = null, message = 'Success', statusCode = 200) => {
+const success = (data = null, message = "Success", statusCode = 200) => {
   return {
     success: true,
     message,
     data,
     timestamp: new Date().toISOString(),
-    statusCode
+    statusCode,
   };
 };
 
@@ -28,14 +28,19 @@ const success = (data = null, message = 'Success', statusCode = 200) => {
  * @param {*} details - Additional error details
  * @returns {Object} Formatted error response
  */
-const error = (message = 'Internal Server Error', code = 'INTERNAL_ERROR', statusCode = 500, details = null) => {
+const error = (
+  message = "Internal Server Error",
+  code = "INTERNAL_ERROR",
+  statusCode = 500,
+  details = null
+) => {
   return {
     success: false,
     message,
     code,
     details,
     timestamp: new Date().toISOString(),
-    statusCode
+    statusCode,
   };
 };
 
@@ -45,14 +50,14 @@ const error = (message = 'Internal Server Error', code = 'INTERNAL_ERROR', statu
  * @param {string} message - Error message
  * @returns {Object} Formatted validation error response
  */
-const validationError = (errors = [], message = 'Validation failed') => {
+const validationError = (errors = [], message = "Validation failed") => {
   return {
     success: false,
     message,
-    code: 'VALIDATION_ERROR',
+    code: "VALIDATION_ERROR",
     errors,
     timestamp: new Date().toISOString(),
-    statusCode: 400
+    statusCode: 400,
   };
 };
 
@@ -63,7 +68,7 @@ const validationError = (errors = [], message = 'Validation failed') => {
  * @param {string} message - Success message
  * @returns {Object} Formatted paginated response
  */
-const paginated = (data = [], pagination = {}, message = 'Success') => {
+const paginated = (data = [], pagination = {}, message = "Success") => {
   return {
     success: true,
     message,
@@ -74,10 +79,10 @@ const paginated = (data = [], pagination = {}, message = 'Success') => {
       total: pagination.total || 0,
       totalPages: pagination.totalPages || 0,
       hasNext: pagination.hasNext || false,
-      hasPrev: pagination.hasPrev || false
+      hasPrev: pagination.hasPrev || false,
     },
     timestamp: new Date().toISOString(),
-    statusCode: 200
+    statusCode: 200,
   };
 };
 
@@ -86,8 +91,8 @@ const paginated = (data = [], pagination = {}, message = 'Success') => {
  * @param {string} message - Error message
  * @returns {Object} Formatted auth error response
  */
-const authError = (message = 'Authentication required') => {
-  return error(message, 'AUTH_ERROR', 401);
+const authError = (message = "Authentication required") => {
+  return error(message, "AUTH_ERROR", 401);
 };
 
 /**
@@ -95,8 +100,8 @@ const authError = (message = 'Authentication required') => {
  * @param {string} message - Error message
  * @returns {Object} Formatted authorization error response
  */
-const forbiddenError = (message = 'Access forbidden') => {
-  return error(message, 'FORBIDDEN_ERROR', 403);
+const forbiddenError = (message = "Access forbidden") => {
+  return error(message, "FORBIDDEN_ERROR", 403);
 };
 
 /**
@@ -104,8 +109,8 @@ const forbiddenError = (message = 'Access forbidden') => {
  * @param {string} resource - Resource name
  * @returns {Object} Formatted not found error response
  */
-const notFoundError = (resource = 'Resource') => {
-  return error(`${resource} not found`, 'NOT_FOUND_ERROR', 404);
+const notFoundError = (resource = "Resource") => {
+  return error(`${resource} not found`, "NOT_FOUND_ERROR", 404);
 };
 
 /**
@@ -113,8 +118,34 @@ const notFoundError = (resource = 'Resource') => {
  * @param {string} message - Error message
  * @returns {Object} Formatted conflict error response
  */
-const conflictError = (message = 'Resource already exists') => {
-  return error(message, 'CONFLICT_ERROR', 409);
+const conflictError = (message = "Resource already exists") => {
+  return error(message, "CONFLICT_ERROR", 409);
+};
+
+/**
+ * Generic response creator
+ * @param {boolean} success - Success status
+ * @param {string} message - Response message
+ * @param {*} data - Response data
+ * @param {string} errorDetails - Error details (for failed responses)
+ * @returns {Object} Formatted response
+ */
+const createResponse = (success, message, data = null, errorDetails = null) => {
+  const response = {
+    success,
+    message,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (success) {
+    response.data = data;
+    response.statusCode = 200;
+  } else {
+    response.error = errorDetails;
+    response.statusCode = 500;
+  }
+
+  return response;
 };
 
 export {
@@ -125,5 +156,6 @@ export {
   authError,
   forbiddenError,
   notFoundError,
-  conflictError
+  conflictError,
+  createResponse,
 };

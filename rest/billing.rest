@@ -1,0 +1,233 @@
+### Billing API Testing
+### Base URL: http://localhost:3000/api/v1/billing
+
+@baseUrl = http://localhost:3000/api/v1
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkZTM2NGUwMDAxMTFqNTlvZWZ5cHE3IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMjAyNjYxLCJleHAiOjE3NTMyODkwNjEsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.9KR5YMNcp3BdAI52RkaQcgmWjwigPPWesN54ATA2hoY
+
+### Health Check
+GET {{baseUrl}}/billing/health
+
+### ===========================================
+### AUTHENTICATION (Get token first)
+### ===========================================
+
+### Login Admin User (from seed data)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+
+### ===========================================
+### BALANCE MANAGEMENT
+### ===========================================
+
+### Get User Balance
+GET {{baseUrl}}/billing/balance
+Authorization: Bearer {{authToken}}
+
+### Get Balance History
+GET {{baseUrl}}/billing/balance/history?page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### Get Balance History with Filters
+GET {{baseUrl}}/billing/balance/history?page=1&limit=10&type=CREDIT&startDate=2024-01-01&endDate=2024-12-31
+Authorization: Bearer {{authToken}}
+
+### ===========================================
+### TOP-UP MANAGEMENT
+### ===========================================
+
+### Create Top-up Transaction
+POST {{baseUrl}}/billing/topup
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "amount": 100000,
+  "currency": "IDR"
+}
+
+### Get Top-up Details
+GET {{baseUrl}}/billing/topup/{{topupId}}
+Authorization: Bearer {{authToken}}
+
+### List User Top-ups
+GET {{baseUrl}}/billing/topup?page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### List Top-ups with Status Filter
+GET {{baseUrl}}/billing/topup?page=1&limit=10&status=PAID
+Authorization: Bearer {{authToken}}
+
+### ===========================================
+### INVOICE MANAGEMENT
+### ===========================================
+
+### List User Invoices
+GET {{baseUrl}}/billing/invoices?page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### List Invoices with Filters
+GET {{baseUrl}}/billing/invoices?page=1&limit=10&type=TOPUP&status=PAID&startDate=2024-01-01&endDate=2024-12-31
+Authorization: Bearer {{authToken}}
+
+### Get Invoice Details
+GET {{baseUrl}}/billing/invoices/{{invoiceId}}
+Authorization: Bearer {{authToken}}
+
+### Download Invoice PDF
+GET {{baseUrl}}/billing/invoices/{{invoiceId}}/pdf
+Authorization: Bearer {{authToken}}
+
+### ===========================================
+### DASHBOARD
+### ===========================================
+
+### Get Dashboard Overview
+GET {{baseUrl}}/billing/dashboard/overview
+Authorization: Bearer {{authToken}}
+
+### Get Billing Analytics
+GET {{baseUrl}}/billing/dashboard/analytics?startDate=2024-01-01&endDate=2024-12-31
+Authorization: Bearer {{authToken}}
+
+### ===========================================
+### TRANSACTION HISTORY
+### ===========================================
+
+### Get All Transactions
+GET {{baseUrl}}/billing/transactions?page=1&limit=20
+Authorization: Bearer {{authToken}}
+
+### Get Transactions with Date Filter
+GET {{baseUrl}}/billing/transactions?page=1&limit=20&startDate=2024-01-01&endDate=2024-12-31
+Authorization: Bearer {{authToken}}
+
+### ===========================================
+### SUBSCRIPTION WITH BALANCE
+### ===========================================
+
+### Check Subscription Eligibility
+GET {{baseUrl}}/services/{{serviceId}}/eligibility
+Authorization: Bearer {{authToken}}
+
+### Create Subscription (using balance)
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "serviceId": "cmdde35wt000011j5yxb0eekx",
+  "confirmBalance": true
+}
+
+### ===========================================
+### WEBHOOK TESTING (No Auth Required)
+### ===========================================
+
+### Midtrans Webhook Simulation
+POST http://amrizals-imac-pro-1.bone-acoustic.ts.net:3000/api/v1/billing/webhooks/midtrans
+Content-Type: application/json
+
+{
+  "va_numbers": [
+    {
+      "va_number": "9889307657698288",
+      "bank": "bni"
+    }
+  ],
+  "transaction_time": "2025-07-23 00:48:22",
+  "transaction_status": "settlement",
+  "transaction_id": "5ad9bda5-f41d-43d7-bc9e-8ae5d1258dbc",
+  "status_message": "midtrans payment notification",
+  "status_code": "200",
+  "signature_key": "3840308ac7b709349cffee958dac912cc860a7db610684062e5260dfb11c79431267dcb4c7c41cfe2b111e35e8bf0baba857d27b86a77ddbc9e7fec5e6fd0086",
+  "settlement_time": "2025-07-23 00:48:34",
+  "payment_type": "bank_transfer",
+  "payment_amounts": [
+    {
+      "paid_at": "2025-07-23 00:48:34",
+      "amount": "100000.00"
+    }
+  ],
+  "order_id": "TOPUP-CMDDE364-1753206462490-U5URT4",
+  "merchant_id": "G765593076",
+  "gross_amount": "100000.00",
+  "fraud_status": "accept",
+  "expiry_time": "2025-07-24 00:47:42",
+  "currency": "IDR"
+}
+
+### ===========================================
+### ERROR TESTING
+### ===========================================
+
+### Test Insufficient Balance
+POST {{baseUrl}}/billing/topup
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "amount": 5000
+}
+
+### Test Invalid Amount
+POST {{baseUrl}}/billing/topup
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "amount": 15000000
+}
+
+### Test Invalid Top-up ID
+GET {{baseUrl}}/billing/topup/invalid-id
+Authorization: Bearer {{authToken}}
+
+### Test Invalid Invoice ID
+GET {{baseUrl}}/billing/invoices/invalid-id
+Authorization: Bearer {{authToken}}
+
+### ===========================================
+### ADMIN TESTING (if admin endpoints exist)
+### ===========================================
+
+### Get All Users' Billing Stats (Admin only)
+GET {{baseUrl}}/billing/admin/stats
+Authorization: Bearer {{authToken}}
+
+### Get User Billing Details (Admin only)
+GET {{baseUrl}}/billing/admin/users/{{userId}}
+Authorization: Bearer {{authToken}}
+
+### ===========================================
+### RATE LIMITING TESTING
+### ===========================================
+
+### Test Rate Limiting (send multiple requests quickly)
+POST {{baseUrl}}/billing/topup
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "amount": 50000
+}
+
+### ===========================================
+### VARIABLES FOR TESTING
+### ===========================================
+
+# Set these variables after getting responses:
+# @topupId = get from create top-up response
+# @invoiceId = get from invoice list response
+# @serviceId = get from service catalog
+# @userId = get from user profile
+
+### Example: Set variables from responses
+# @topupId = {{createTopup.response.body.data.transactionId}}
+# @invoiceId = {{listInvoices.response.body.data.invoices[0].id}}

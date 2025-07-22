@@ -365,6 +365,156 @@ const workerNodeNameSchema = Joi.object({
 });
 
 /**
+ * Worker node ID or name parameter validation schema (flexible)
+ */
+const workerNodeIdOrNameSchema = Joi.object({
+  nodeId: Joi.string().required().messages({
+    "string.empty": "Worker node ID or name is required",
+    "any.required": "Worker node ID or name is required",
+  }),
+});
+
+/**
+ * Worker node registration validation schema (for auto-registration)
+ */
+const workerRegistrationSchema = Joi.object({
+  name: Joi.string().min(2).max(100).required().messages({
+    "string.empty": "Worker node name is required",
+    "string.min": "Worker node name must be at least 2 characters long",
+    "string.max": "Worker node name must not exceed 100 characters",
+    "any.required": "Worker node name is required",
+  }),
+
+  hostname: Joi.string().min(3).max(255).required().messages({
+    "string.empty": "Hostname is required",
+    "string.min": "Hostname must be at least 3 characters long",
+    "string.max": "Hostname must not exceed 255 characters",
+    "any.required": "Hostname is required",
+  }),
+
+  ipAddress: Joi.string().ip().required().messages({
+    "string.ip": "Please provide a valid IP address",
+    "any.required": "IP address is required",
+  }),
+
+  // Hardware Resources (required for auto-registration)
+  cpuCores: Joi.number().integer().min(1).max(128).required().messages({
+    "number.base": "CPU cores must be a number",
+    "number.integer": "CPU cores must be an integer",
+    "number.min": "CPU cores must be at least 1",
+    "number.max": "CPU cores must not exceed 128",
+    "any.required": "CPU cores is required",
+  }),
+
+  cpuArchitecture: Joi.string().required().messages({
+    "string.empty": "CPU architecture is required",
+    "any.required": "CPU architecture is required",
+  }),
+
+  totalMemory: Joi.string().required().messages({
+    "string.empty": "Total memory is required",
+    "any.required": "Total memory is required (e.g., '32Gi', '64Gi')",
+  }),
+
+  totalStorage: Joi.string().required().messages({
+    "string.empty": "Total storage is required",
+    "any.required": "Total storage is required (e.g., '1Ti', '500Gi')",
+  }),
+
+  // Node Specifications
+  architecture: Joi.string().valid("amd64", "arm64").default("amd64").messages({
+    "any.only": "Architecture must be either amd64 or arm64",
+  }),
+
+  operatingSystem: Joi.string().default("linux").messages({
+    "string.base": "Operating system must be a string",
+  }),
+
+  // Optional Kubernetes metadata
+  kubeletVersion: Joi.string().optional().messages({
+    "string.base": "Kubelet version must be a string",
+  }),
+
+  containerRuntime: Joi.string().optional().messages({
+    "string.base": "Container runtime must be a string",
+  }),
+
+  kernelVersion: Joi.string().optional().messages({
+    "string.base": "Kernel version must be a string",
+  }),
+
+  osImage: Joi.string().optional().messages({
+    "string.base": "OS image must be a string",
+  }),
+
+  // Optional capacity settings
+  maxPods: Joi.number().integer().min(1).max(250).default(110).messages({
+    "number.base": "Max pods must be a number",
+    "number.integer": "Max pods must be an integer",
+    "number.min": "Max pods must be at least 1",
+    "number.max": "Max pods must not exceed 250",
+  }),
+
+  // Optional labels and taints
+  labels: Joi.object()
+    .pattern(Joi.string(), Joi.string())
+    .default({})
+    .messages({
+      "object.base": "Labels must be an object",
+    }),
+
+  taints: Joi.array().items(Joi.object()).default([]).messages({
+    "array.base": "Taints must be an array",
+  }),
+});
+
+/**
+ * Worker node heartbeat validation schema (for realtime heartbeat updates)
+ */
+const workerHeartbeatSchema = Joi.object({
+  // Optional resource metrics in heartbeat
+  allocatedCPU: Joi.number().min(0).optional().messages({
+    "number.base": "Allocated CPU must be a number",
+    "number.min": "Allocated CPU cannot be negative",
+  }),
+
+  allocatedMemory: Joi.number().integer().min(0).optional().messages({
+    "number.base": "Allocated memory must be a number (in MB)",
+    "number.integer": "Allocated memory must be an integer",
+    "number.min": "Allocated memory cannot be negative",
+  }),
+
+  allocatedStorage: Joi.number().integer().min(0).optional().messages({
+    "number.base": "Allocated storage must be a number (in GB)",
+    "number.integer": "Allocated storage must be an integer",
+    "number.min": "Allocated storage cannot be negative",
+  }),
+
+  currentPods: Joi.number().integer().min(0).optional().messages({
+    "number.base": "Current pods must be a number",
+    "number.integer": "Current pods must be an integer",
+    "number.min": "Current pods cannot be negative",
+  }),
+
+  // Note: System usage metrics (cpuUsagePercent, memoryUsagePercent, storageUsagePercent)
+  // are not stored in database - removed from validation to match database schema
+
+  // Optional status update
+  status: Joi.string()
+    .valid("ACTIVE", "INACTIVE", "MAINTENANCE", "PENDING", "NOT_READY")
+    .optional()
+    .messages({
+      "any.only":
+        "Status must be one of: ACTIVE, INACTIVE, MAINTENANCE, PENDING, NOT_READY",
+    }),
+
+  // Optional ready state update
+  isReady: Joi.boolean().optional().messages({
+    "boolean.base": "Ready status must be a boolean",
+  }),
+});
+
+/**
  * Generic validation middleware
  * @param {Joi.Schema} schema - Joi validation schema
  * @param {string} property - Request property to validate (body, query, params)
@@ -400,6 +550,9 @@ const validateUpdateNodeStatus = validate(updateNodeStatusSchema);
 const validateUpdateNodeResources = validate(updateNodeResourcesSchema);
 const validateWorkerNodeId = validate(workerNodeIdSchema, "params");
 const validateWorkerNodeName = validate(workerNodeNameSchema, "params");
+const validateWorkerNodeIdOrName = validate(workerNodeIdOrNameSchema, "params");
+const validateWorkerRegistration = validate(workerRegistrationSchema);
+const validateWorkerHeartbeat = validate(workerHeartbeatSchema);
 
 export {
   createWorkerNodeSchema,
@@ -409,6 +562,9 @@ export {
   updateNodeResourcesSchema,
   workerNodeIdSchema,
   workerNodeNameSchema,
+  workerNodeIdOrNameSchema,
+  workerRegistrationSchema,
+  workerHeartbeatSchema,
   validate,
   validateCreateWorkerNode,
   validateUpdateWorkerNode,
@@ -417,4 +573,7 @@ export {
   validateUpdateNodeResources,
   validateWorkerNodeId,
   validateWorkerNodeName,
+  validateWorkerNodeIdOrName,
+  validateWorkerRegistration,
+  validateWorkerHeartbeat,
 };

@@ -10,6 +10,7 @@ import logger from "./utils/logger.util.js";
 import errorMiddleware from "./middleware/error.middleware.js";
 import * as responseUtil from "./utils/response.util.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
+import jobScheduler from "./jobs/job-scheduler.js";
 
 // Import routes
 import authRoutes from "./routes/auth.routes.js";
@@ -18,6 +19,7 @@ import serviceRoutes from "./routes/services.routes.js";
 import workerRoutes from "./routes/workers.routes.js";
 import subscriptionRoutes from "./routes/subscriptions.routes.js";
 import podRoutes from "./routes/pods.routes.js";
+import billingRoutes from "./routes/billing.routes.js";
 
 dotenv.config();
 
@@ -79,6 +81,7 @@ app.use(`/api/${API_VERSION}/services`, serviceRoutes);
 app.use(`/api/${API_VERSION}/workers`, workerRoutes);
 app.use(`/api/${API_VERSION}/subscriptions`, subscriptionRoutes);
 app.use(`/api/${API_VERSION}/pods`, podRoutes);
+app.use(`/api/${API_VERSION}/billing`, billingRoutes);
 
 // 404 handler
 app.use("*", (req, res) => {
@@ -93,12 +96,14 @@ app.use(errorMiddleware);
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
+  jobScheduler.stop();
   await disconnectDatabase();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   logger.info("SIGINT received, shutting down gracefully");
+  jobScheduler.stop();
   await disconnectDatabase();
   process.exit(0);
 });
@@ -109,6 +114,9 @@ const startServer = async () => {
     // Connect to database
     await connectDatabase();
 
+    // Start job scheduler
+    jobScheduler.start();
+
     // Start Express server
     app.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT}`);
@@ -118,6 +126,7 @@ const startServer = async () => {
       logger.info(`🏥 Health Check: http://localhost:${PORT}/health`);
       logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
       logger.info(`💾 Database connected successfully`);
+      logger.info(`⏰ Background jobs started successfully`);
     });
   } catch (error) {
     logger.error("Failed to start server:", error);

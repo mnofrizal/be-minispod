@@ -107,12 +107,38 @@ const getWorkerNodeById = async (nodeId) => {
     });
 
     if (workerNode) {
-      logger.info(`Retrieved worker node: ${workerNode.name}`);
+      logger.info(`Retrieved worker node by ID: ${workerNode.name}`, {
+        nodeId,
+      });
     }
 
     return workerNode;
   } catch (error) {
     logger.error("Error getting worker node by ID:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get worker node by name
+ * @param {string} nodeName - Worker node name
+ * @returns {Promise<Object|null>} Worker node object or null
+ */
+const getWorkerNodeByName = async (nodeName) => {
+  try {
+    const workerNode = await prisma.workerNode.findUnique({
+      where: { name: nodeName },
+    });
+
+    if (workerNode) {
+      logger.info(`Retrieved worker node by name: ${workerNode.name}`, {
+        nodeName,
+      });
+    }
+
+    return workerNode;
+  } catch (error) {
+    logger.error("Error getting worker node by name:", error);
     throw error;
   }
 };
@@ -139,9 +165,9 @@ const createWorkerNode = async (nodeData) => {
       isSchedulable = false,
       maxPods = 110,
       currentPods = 0,
-      allocatedCPU = 0,
-      allocatedMemory = 0,
-      allocatedStorage = 0,
+      allocatedCPU = "0",
+      allocatedMemory = "0",
+      allocatedStorage = "0",
       labels = {},
       taints = [],
       kubeletVersion,
@@ -212,10 +238,11 @@ const updateWorkerNode = async (nodeId, updateData) => {
     // Check if worker node exists
     const existingNode = await prisma.workerNode.findUnique({
       where: { id: nodeId },
+      select: { id: true, name: true },
     });
 
     if (!existingNode) {
-      const error = new Error("Worker node not found");
+      const error = new Error(`Worker node not found: ${nodeId}`);
       error.code = "WORKER_NODE_NOT_FOUND";
       throw error;
     }
@@ -229,7 +256,9 @@ const updateWorkerNode = async (nodeId, updateData) => {
       },
     });
 
-    logger.info(`Updated worker node: ${updatedNode.name}`);
+    logger.info(`Updated worker node: ${updatedNode.name}`, {
+      nodeId,
+    });
 
     return updatedNode;
   } catch (error) {
@@ -248,10 +277,11 @@ const deleteWorkerNode = async (nodeId) => {
     // Check if worker node exists
     const existingNode = await prisma.workerNode.findUnique({
       where: { id: nodeId },
+      select: { id: true, name: true },
     });
 
     if (!existingNode) {
-      const error = new Error("Worker node not found");
+      const error = new Error(`Worker node not found: ${nodeId}`);
       error.code = "WORKER_NODE_NOT_FOUND";
       throw error;
     }
@@ -271,7 +301,9 @@ const deleteWorkerNode = async (nodeId) => {
       },
     });
 
-    logger.info(`Deleted worker node: ${deletedNode.name}`);
+    logger.info(`Deleted worker node: ${deletedNode.name}`, {
+      nodeId,
+    });
 
     return deletedNode;
   } catch (error) {
@@ -283,26 +315,28 @@ const deleteWorkerNode = async (nodeId) => {
 /**
  * Toggle worker node schedulable status (admin only)
  * @param {string} nodeId - Worker node ID
+ * @param {boolean} schedulable - Whether node should be schedulable
  * @returns {Promise<Object>} Updated worker node object
  */
-const toggleNodeSchedulable = async (nodeId) => {
+const toggleNodeSchedulable = async (nodeId, schedulable) => {
   try {
     // Check if worker node exists
     const existingNode = await prisma.workerNode.findUnique({
       where: { id: nodeId },
+      select: { id: true, name: true, isSchedulable: true },
     });
 
     if (!existingNode) {
-      const error = new Error("Worker node not found");
+      const error = new Error(`Worker node not found: ${nodeId}`);
       error.code = "WORKER_NODE_NOT_FOUND";
       throw error;
     }
 
-    // Toggle schedulable status
+    // Update schedulable status
     const updatedNode = await prisma.workerNode.update({
       where: { id: nodeId },
       data: {
-        isSchedulable: !existingNode.isSchedulable,
+        isSchedulable: schedulable,
         updatedAt: new Date(),
       },
       select: {
@@ -316,7 +350,11 @@ const toggleNodeSchedulable = async (nodeId) => {
     });
 
     logger.info(
-      `Toggled worker node schedulable status: ${updatedNode.name} - Schedulable: ${updatedNode.isSchedulable}`
+      `Updated worker node schedulable status: ${updatedNode.name} - Schedulable: ${updatedNode.isSchedulable}`,
+      {
+        nodeId,
+        schedulable,
+      }
     );
 
     return updatedNode;
@@ -337,10 +375,11 @@ const updateNodeStatus = async (nodeId, status) => {
     // Check if worker node exists
     const existingNode = await prisma.workerNode.findUnique({
       where: { id: nodeId },
+      select: { id: true, name: true },
     });
 
     if (!existingNode) {
-      const error = new Error("Worker node not found");
+      const error = new Error(`Worker node not found: ${nodeId}`);
       error.code = "WORKER_NODE_NOT_FOUND";
       throw error;
     }
@@ -374,7 +413,11 @@ const updateNodeStatus = async (nodeId, status) => {
     });
 
     logger.info(
-      `Updated worker node status: ${updatedNode.name} - Status: ${updatedNode.status}`
+      `Updated worker node status: ${updatedNode.name} - Status: ${updatedNode.status}`,
+      {
+        nodeId,
+        status,
+      }
     );
 
     return updatedNode;
@@ -387,21 +430,78 @@ const updateNodeStatus = async (nodeId, status) => {
 /**
  * Update worker node heartbeat (system call)
  * @param {string} nodeId - Worker node ID
+ * @param {Object} heartbeatData - Optional heartbeat data
  * @returns {Promise<Object>} Updated worker node object
  */
-const updateNodeHeartbeat = async (nodeId) => {
+const updateNodeHeartbeat = async (nodeId, heartbeatData = {}) => {
   try {
+    // Check if worker node exists
+    const existingNode = await prisma.workerNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true, name: true },
+    });
+
+    if (!existingNode) {
+      const error = new Error(`Worker node not found: ${nodeId}`);
+      error.code = "WORKER_NODE_NOT_FOUND";
+      throw error;
+    }
+
+    // Prepare update data with heartbeat timestamp
+    const updateData = {
+      lastHeartbeat: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Add optional status update if provided
+    if (heartbeatData.status) {
+      updateData.status = heartbeatData.status;
+    }
+    if (heartbeatData.isReady !== undefined) {
+      updateData.isReady = heartbeatData.isReady;
+    }
+
+    // Add optional resource metrics if provided
+    if (heartbeatData.allocatedCPU !== undefined) {
+      updateData.allocatedCPU = heartbeatData.allocatedCPU.toString();
+    }
+    if (heartbeatData.allocatedMemory !== undefined) {
+      updateData.allocatedMemory = heartbeatData.allocatedMemory.toString();
+    }
+    if (heartbeatData.allocatedStorage !== undefined) {
+      updateData.allocatedStorage = heartbeatData.allocatedStorage.toString();
+    }
+    if (heartbeatData.currentPods !== undefined) {
+      updateData.currentPods = heartbeatData.currentPods;
+    }
+
+    // Note: System usage metrics (cpuUsagePercent, memoryUsagePercent, storageUsagePercent)
+    // are not stored in database - they would need to be added to schema if required
+
+    // Update worker node
     const updatedNode = await prisma.workerNode.update({
       where: { id: nodeId },
-      data: {
-        lastHeartbeat: new Date(),
-        updatedAt: new Date(),
-      },
+      data: updateData,
       select: {
         id: true,
         name: true,
         lastHeartbeat: true,
         status: true,
+        isReady: true,
+        allocatedCPU: true,
+        allocatedMemory: true,
+        allocatedStorage: true,
+        currentPods: true,
+      },
+    });
+
+    logger.info(`Worker node heartbeat updated: ${updatedNode.name}`, {
+      nodeId,
+      status: updatedNode.status,
+      resourceMetrics: {
+        allocatedCPU: updatedNode.allocatedCPU,
+        allocatedMemory: updatedNode.allocatedMemory,
+        currentPods: updatedNode.currentPods,
       },
     });
 
@@ -669,9 +769,128 @@ const getOfflineWorkerNodes = async () => {
   }
 };
 
+/**
+ * Register worker node (auto-registration with update capability)
+ * @param {Object} nodeData - Worker node data
+ * @returns {Promise<Object>} Registered or updated worker node object
+ */
+const registerWorkerNode = async (nodeData) => {
+  try {
+    const {
+      name,
+      hostname,
+      ipAddress,
+      cpuCores,
+      cpuArchitecture,
+      totalMemory,
+      totalStorage,
+      architecture = "amd64",
+      operatingSystem = "linux",
+      maxPods = 110,
+      labels = {},
+      taints = [],
+      kubeletVersion,
+      containerRuntime,
+      kernelVersion,
+      osImage,
+    } = nodeData;
+
+    // Check if worker node already exists by name or IP
+    const existingNode = await prisma.workerNode.findFirst({
+      where: {
+        OR: [{ name }, { ipAddress }],
+      },
+    });
+
+    if (existingNode) {
+      // Update existing node with new information
+      const updatedNode = await prisma.workerNode.update({
+        where: { id: existingNode.id },
+        data: {
+          hostname,
+          ipAddress,
+          cpuCores,
+          cpuArchitecture,
+          totalMemory,
+          totalStorage,
+          architecture,
+          operatingSystem,
+          maxPods,
+          labels,
+          taints,
+          kubeletVersion,
+          containerRuntime,
+          kernelVersion,
+          osImage,
+          lastHeartbeat: new Date(),
+          lastHealthCheck: new Date(),
+          status: "ACTIVE",
+          isReady: true,
+          isSchedulable: true,
+          updatedAt: new Date(),
+        },
+      });
+
+      logger.info(
+        `Updated existing worker node during registration: ${updatedNode.name}`
+      );
+
+      // Return with special code to indicate update
+      const error = new Error("Worker node updated");
+      error.code = "WORKER_NODE_UPDATED";
+      error.data = updatedNode;
+      throw error;
+    }
+
+    // Create new worker node
+    const workerNode = await prisma.workerNode.create({
+      data: {
+        name,
+        hostname,
+        ipAddress,
+        cpuCores,
+        cpuArchitecture,
+        totalMemory,
+        totalStorage,
+        architecture,
+        operatingSystem,
+        status: "ACTIVE",
+        isReady: true,
+        isSchedulable: true,
+        maxPods,
+        currentPods: 0,
+        allocatedCPU: "0",
+        allocatedMemory: "0",
+        allocatedStorage: "0",
+        labels,
+        taints,
+        kubeletVersion,
+        containerRuntime,
+        kernelVersion,
+        osImage,
+        lastHeartbeat: new Date(),
+        lastHealthCheck: new Date(),
+      },
+    });
+
+    logger.info(
+      `Registered new worker node: ${workerNode.name} (${workerNode.ipAddress})`
+    );
+
+    return workerNode;
+  } catch (error) {
+    if (error.code === "WORKER_NODE_UPDATED") {
+      throw error; // Re-throw the update signal
+    }
+    logger.error("Error registering worker node:", error);
+    throw error;
+  }
+};
+
 export {
   getAllWorkerNodes,
   getWorkerNodeById,
+  getWorkerNodeByName,
   createWorkerNode,
   updateWorkerNode,
   deleteWorkerNode,
@@ -682,4 +901,5 @@ export {
   getWorkerNodeStats,
   getOnlineWorkerNodes,
   getOfflineWorkerNodes,
+  registerWorkerNode,
 };

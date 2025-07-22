@@ -1,0 +1,109 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: be-minispod-postgres-1
+    environment:
+      POSTGRES_DB: paas_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - paas-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: be-minispod-redis-1
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - paas-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Commander (Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: be-minispod-redis-commander-1
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - paas-network
+    depends_on:
+      - redis
+
+  # Adminer (Database GUI)
+  adminer:
+    image: adminer:latest
+    container_name: be-minispod-adminer-1
+    ports:
+      - "8080:8080"
+    networks:
+      - paas-network
+    depends_on:
+      - postgres
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: be-minispod-prometheus-1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
+    networks:
+      - paas-network
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: be-minispod-grafana-1
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - paas-network
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  paas-network:
+    driver: bridge
