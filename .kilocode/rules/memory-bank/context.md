@@ -2,9 +2,9 @@
 
 ## Project Status
 
-**Phase**: Phase 1 COMPLETE - Production-Ready Backend System with Advanced Worker Management
+**Phase**: Phase 2 COMPLETE - Credit-Based Billing System with Midtrans Integration
 **Last Updated**: 2025-07-22
-**Current Focus**: Phase 1 MVP completed with production-ready backend architecture including advanced worker management system with auto-registration, realtime heartbeats, and proper architectural patterns, ready for Phase 2
+**Current Focus**: Complete credit-based billing system implemented with Midtrans payment gateway integration, replacing direct payment model with top-up balance system. Production-ready with comprehensive documentation and troubleshooting guides.
 
 ## Current State
 
@@ -15,7 +15,8 @@
 - **Admin User Management**: Complete CRUD operations for user administration
 - **Service Catalog Management**: Full service catalog system with public and admin endpoints
 - **Production-Ready Worker Management**: Advanced Kubernetes worker node monitoring with auto-registration, realtime heartbeats, and proper architectural patterns
-- **Database Schema**: PostgreSQL with Prisma ORM, centralized configuration
+- **Credit-Based Billing System**: Complete billing system with Midtrans payment gateway integration
+- **Database Schema**: PostgreSQL with Prisma ORM, centralized configuration including billing models
 - **API Framework**: Express routes, middleware, error handling, validation
 - **Development Tools**: Comprehensive REST API testing files, logging, security middleware
 - **User Role System**: Simplified USER and ADMINISTRATOR roles with constants
@@ -30,34 +31,42 @@ src/
 │   ├── auth.controller.js       # Authentication request handlers
 │   ├── user.controller.js       # Admin user management handlers
 │   ├── service.controller.js    # Service catalog handlers
-│   └── worker.controller.js     # Worker node management with ID/name resolution
+│   ├── worker.controller.js     # Worker node management with ID/name resolution
+│   └── billing.controller.js    # Billing operations (balance, top-up, invoices)
 ├── middleware/
 │   ├── auth.middleware.js       # JWT authentication & authorization
-│   └── error.middleware.js      # Global error handling
+│   ├── error.middleware.js      # Global error handling
+│   └── billing.middleware.js    # Balance validation and payment security
 ├── routes/
 │   ├── auth.routes.js          # Authentication endpoints
 │   ├── users.routes.js         # User management with validation
 │   ├── services.routes.js      # Service catalog with validation
 │   ├── workers.routes.js       # Worker node management with flexible validation
-│   ├── subscriptions.routes.js # Subscription management (placeholder)
+│   ├── billing.routes.js       # Billing system endpoints
+│   ├── subscriptions.routes.js # Subscription management with credit-based flow
 │   └── pods.routes.js          # Pod management (placeholder)
 ├── services/
 │   ├── auth.service.js         # Authentication business logic
 │   ├── user.service.js         # User management business logic
 │   ├── service.service.js      # Service catalog business logic
-│   └── worker.service.js       # Worker node management with focused functions
+│   ├── worker.service.js       # Worker node management with focused functions
+│   ├── billing.service.js      # Balance, top-up, and invoice management
+│   ├── midtrans.service.js     # Midtrans payment gateway integration
+│   └── subscription.service.js # Credit-based subscription lifecycle
 ├── validations/
 │   ├── auth.validation.js      # Authentication validation schemas
 │   ├── user.validation.js      # User management validation schemas
 │   ├── service.validation.js   # Service catalog validation schemas
-│   └── worker.validation.js    # Worker node validation with flexible schemas
+│   ├── worker.validation.js    # Worker node validation with flexible schemas
+│   └── billing.validation.js   # Billing operations validation
 ├── jobs/
 │   ├── health-monitor.job.js   # Background health monitoring job
+│   ├── billing.jobs.js         # Payment processing and billing automation
 │   └── job-scheduler.js        # Job scheduling system
 ├── utils/
 │   ├── crypto.util.js          # Password hashing utilities
 │   ├── logger.util.js          # Winston logging setup
-│   ├── response.util.js        # API response formatting
+│   ├── response.util.js        # API response formatting with createResponse
 │   ├── validation.util.js      # Input validation and UUID detection helpers
 │   ├── http-status.util.js     # HTTP status code constants
 │   └── user-roles.util.js      # User role constants
@@ -65,19 +74,22 @@ src/
     └── database.js             # Centralized Prisma configuration
 
 prisma/
-├── schema.prisma               # Database schema with User, ServiceCatalog, and WorkerNode models
+├── schema.prisma               # Database schema with billing models (UserBalance, TopUpTransaction, Invoice, BalanceTransaction)
 ├── seed.js                     # Database seeding with test data
 └── migrations/                 # Database migration files
-
-k8s-deployments/
-└── heartbeat-agent-daemonset.yaml # Kubernetes DaemonSet for production heartbeats
 
 rest/
 ├── auth.rest                   # Authentication API testing
 ├── user.rest                   # User management API testing
 ├── service.rest                # Service catalog API testing
 ├── worker.rest                 # Worker node management API testing
-└── worker-registration.rest    # Worker auto-registration API testing
+└── billing.rest                # Billing system API testing (25+ test cases)
+
+# Documentation
+├── BILLING_SYSTEM_SETUP.md         # Complete billing system setup guide
+├── MIDTRANS_INTEGRATION_GUIDE.md   # Comprehensive Midtrans integration (580+ lines)
+├── MIDTRANS_QUICK_START.md         # 30-minute quick setup guide
+└── MIDTRANS_TROUBLESHOOTING.md     # Troubleshooting guide with common issues
 
 # Development Scripts
 ├── auto-register-workers.js         # k3d worker auto-registration script
@@ -119,6 +131,38 @@ rest/
 - **Service Search**: Search and filter services
 - **Service Statistics**: Dashboard statistics for service counts
 - **Category Management**: Service categorization and organization
+
+#### Credit-Based Billing System
+
+- **User Balance Management**: Real-time balance tracking with transaction history
+- **Top-up System**: Midtrans payment gateway integration with multiple payment methods
+- **Invoice Generation**: Automated invoice creation for top-ups and subscriptions
+- **Transaction Processing**: Secure webhook handling with signature validation
+- **Balance Validation**: Middleware to ensure sufficient funds before operations
+- **Payment Security**: PCI DSS compliance via Midtrans with encrypted transactions
+- **Background Jobs**: Automated payment processing, status sync, and cleanup
+- **Dashboard Analytics**: Comprehensive billing overview and transaction analytics
+- **Multi-currency Support**: IDR currency with configurable limits (IDR 10K-10M)
+- **Audit Trail**: Complete transaction logging for compliance and debugging
+
+**Midtrans Integration Features:**
+
+- **Snap API Integration**: Seamless payment page generation with 24-hour expiry
+- **Multiple Payment Methods**: Credit cards, bank transfer, e-wallets (GoPay, OVO, DANA)
+- **Webhook Processing**: Real-time payment status updates with signature validation
+- **Transaction Tracking**: Complete payment lifecycle management with status mapping
+- **Sandbox Testing**: Comprehensive test environment with test credit cards
+- **Production Ready**: Environment switching with proper SSL and security
+- **Error Handling**: Comprehensive error management with detailed logging
+- **Rate Limiting**: Payment endpoint protection against abuse
+
+**Credit-Based Subscription Flow:**
+
+- **Balance Check**: Pre-validation before subscription creation
+- **Automatic Deduction**: Credit balance deduction upon subscription
+- **Invoice Generation**: Automated billing documentation for subscriptions
+- **Renewal System**: Credit-based subscription renewal with balance validation
+- **Subscription Analytics**: Usage tracking and spending analytics
 
 #### Production-Ready Worker Management System
 
@@ -209,17 +253,21 @@ rest/
 3. **Admin System**: Complete user management for administrators
 4. **Service Management**: Full service catalog system
 5. **Production-Ready Worker Management**: Advanced Kubernetes worker node monitoring with auto-registration and realtime heartbeats
-6. **Development Experience**: Comprehensive REST testing files, development scripts, and logging setup
-7. **Database Foundation**: Prisma schema with migrations and seeding
-8. **API Structure**: RESTful endpoints with proper middleware and flexible validation
-9. **Code Quality**: Eliminated magic numbers and strings with constants
-10. **Architecture**: Proper separation of concerns with controller-level validation and service-level business logic
-11. **Kubernetes Integration**: Auto-registration system, realtime heartbeats, and production deployment ready
-12. **Background Job System**: Automated health monitoring and resource tracking
-13. **Local Development**: Complete k3d integration with auto-registration and heartbeat scripts
-14. **Production Deployment**: Kubernetes DaemonSet for automatic worker node agents
-15. **Flexible Parameter Handling**: APIs support both database IDs and worker node names
-16. **Real Data Integration**: Extracts actual worker specifications from Kubernetes cluster
+6. **Credit-Based Billing System**: Complete billing system with Midtrans payment gateway integration
+7. **Payment Gateway Integration**: Secure Midtrans integration with webhook processing and signature validation
+8. **Database Foundation**: Prisma schema with migrations, seeding, and billing models
+9. **API Structure**: RESTful endpoints with proper middleware and flexible validation
+10. **Background Job System**: Automated health monitoring, resource tracking, and payment processing
+11. **Development Experience**: Comprehensive REST testing files, development scripts, and logging setup
+12. **Code Quality**: Eliminated magic numbers and strings with constants
+13. **Architecture**: Proper separation of concerns with controller-level validation and service-level business logic
+14. **Kubernetes Integration**: Auto-registration system, realtime heartbeats, and production deployment ready
+15. **Local Development**: Complete k3d integration with auto-registration and heartbeat scripts
+16. **Production Deployment**: Kubernetes DaemonSet for automatic worker node agents
+17. **Flexible Parameter Handling**: APIs support both database IDs and worker node names
+18. **Real Data Integration**: Extracts actual worker specifications from Kubernetes cluster
+19. **Payment Security**: PCI DSS compliance, webhook signature validation, and secure transaction processing
+20. **Comprehensive Documentation**: Complete integration guides, troubleshooting, and quick start documentation
 
 ## Current Blockers
 
@@ -251,17 +299,19 @@ rest/
 - ⏳ Background job system setup (Bull/Agenda)
 - ⏳ Email notification system
 
-## Phase 1 MVP Summary
+## Phase 2 MVP Summary
 
-Phase 1 has been successfully completed with a comprehensive backend system that includes:
+Phase 2 has been successfully completed with a comprehensive backend system that includes:
 
 - **Complete Authentication System** with JWT tokens and role-based access
 - **Admin User Management** with full CRUD operations and search capabilities
 - **Service Catalog Management** with public and administrative interfaces
 - **Production-Ready Worker Management** with auto-registration, realtime heartbeats, and detailed Kubernetes node monitoring
+- **Credit-Based Billing System** with Midtrans payment gateway integration
+- **Payment Gateway Integration** with secure webhook processing and signature validation
+- **Database Foundation** with Prisma ORM, migrations, seeding, and billing models
 - **Modern Architecture** with ES6 modules, proper validation, and centralized constants
 - **Development Tools** with comprehensive REST API testing files
-- **Database Foundation** with Prisma ORM, migrations, and seeding
 
 ### Worker Management System Highlights
 
