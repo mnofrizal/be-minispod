@@ -2,7 +2,6 @@ import express from "express";
 import {
   getAllWorkerNodesController,
   getWorkerNodeByIdController,
-  getWorkerNodeByNameController,
   createWorkerNodeController,
   updateWorkerNodeController,
   deleteWorkerNodeController,
@@ -55,14 +54,6 @@ router.get(
   adminOnly,
   validateWorkerNodeId,
   getWorkerNodeByIdController
-);
-
-// GET /api/workers/name/:nodeName - Get worker node by name
-router.get(
-  "/name/:nodeName",
-  adminOnly,
-  validateWorkerNodeName,
-  getWorkerNodeByNameController
 );
 
 // POST /api/workers - Create new worker node
