@@ -171,52 +171,6 @@ export const balanceService = {
       throw error;
     }
   },
-
-  /**
-   * Get paginated balance transaction history
-   */
-  async getBalanceHistory(
-    userId,
-    { page = 1, limit = 20, type = null, startDate = null, endDate = null }
-  ) {
-    try {
-      const skip = (page - 1) * limit;
-      const where = {
-        userId,
-        ...(type && { type }),
-        ...(startDate &&
-          endDate && {
-            createdAt: {
-              gte: new Date(startDate),
-              lte: new Date(endDate),
-            },
-          }),
-      };
-
-      const [transactions, total] = await Promise.all([
-        prisma.balanceTransaction.findMany({
-          where,
-          orderBy: { createdAt: "desc" },
-          skip,
-          take: limit,
-        }),
-        prisma.balanceTransaction.count({ where }),
-      ]);
-
-      return {
-        transactions,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    } catch (error) {
-      logger.error(`Error getting balance history for user ${userId}:`, error);
-      throw error;
-    }
-  },
 };
 
 /**
@@ -270,6 +224,15 @@ export const topUpService = {
           midtransData: midtransResponse,
         },
       });
+
+      // Create unified transaction record for pending top-up
+      await transactionService.createTopUpTransaction(
+        userId,
+        updatedTransaction.id,
+        amount,
+        null, // Payment method not known yet
+        "MIDTRANS"
+      );
 
       logger.info(`Created top-up transaction ${orderId} for user ${userId}`);
 
@@ -347,7 +310,7 @@ export const topUpService = {
         );
 
         // Generate invoice
-        await invoiceService.generateInvoice(
+        const invoice = await invoiceService.generateInvoice(
           topUpTransaction.userId,
           "TOPUP",
           topUpTransaction.amount,
@@ -355,8 +318,27 @@ export const topUpService = {
           "topup"
         );
 
+        // Link invoice to existing unified transaction
+        if (invoice) {
+          await transactionService.linkInvoiceToTransaction(
+            topUpTransaction.id,
+            "topup",
+            invoice.id
+          );
+        }
+
         logger.info(
           `Payment successful for order ${order_id}. Credit added to user ${topUpTransaction.userId}`
+        );
+      }
+
+      // Update unified transaction status for any status change
+      if (isStatusChanged) {
+        await transactionService.updateTransactionStatus(
+          topUpTransaction.id,
+          "topup",
+          newStatus,
+          payment_type
         );
       }
 
@@ -463,6 +445,121 @@ export const topUpService = {
       return expiredTransactions.count;
     } catch (error) {
       logger.error("Error expiring unpaid top-ups:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Retry payment for pending top-up transaction
+   */
+  async retryPayment(transactionId, userId) {
+    try {
+      // First, find the unified transaction
+      const unifiedTransaction = await prisma.transaction.findFirst({
+        where: {
+          id: transactionId,
+          userId,
+          type: "TOPUP",
+          status: "PENDING",
+        },
+      });
+
+      if (!unifiedTransaction) {
+        throw new Error("Pending top-up transaction not found");
+      }
+
+      // Get the top-up transaction using the reference ID
+      const topUpTransaction = await prisma.topUpTransaction.findUnique({
+        where: { id: unifiedTransaction.referenceId },
+        include: { user: true },
+      });
+
+      if (!topUpTransaction) {
+        throw new Error("Top-up transaction not found");
+      }
+
+      // Check if transaction is still pending and not expired
+      if (topUpTransaction.status !== "PENDING") {
+        throw new Error(
+          `Transaction is no longer pending. Current status: ${topUpTransaction.status}`
+        );
+      }
+
+      // Check if transaction has expired
+      if (
+        topUpTransaction.expiredAt &&
+        new Date() > topUpTransaction.expiredAt
+      ) {
+        // Update status to expired
+        await prisma.topUpTransaction.update({
+          where: { id: topUpTransaction.id },
+          data: { status: "EXPIRED" },
+        });
+
+        // Update unified transaction status
+        await transactionService.updateTransactionStatus(
+          topUpTransaction.id,
+          "topup",
+          "EXPIRED"
+        );
+
+        throw new Error("Transaction has expired. Please create a new top-up.");
+      }
+
+      // Check if we have a valid Snap token
+      if (topUpTransaction.snapToken) {
+        // Return existing Snap token if still valid
+        return {
+          transactionId: topUpTransaction.id,
+          orderId: topUpTransaction.orderId,
+          amount: topUpTransaction.amount,
+          currency: topUpTransaction.currency,
+          status: topUpTransaction.status,
+          snapToken: topUpTransaction.snapToken,
+          redirectUrl: topUpTransaction.midtransData?.redirect_url,
+          expiresAt: topUpTransaction.expiredAt,
+        };
+      }
+
+      // If no Snap token, regenerate it
+      const customerDetails = midtransService.formatCustomerDetails(
+        topUpTransaction.user
+      );
+      const midtransResponse = await midtransService.createSnapTransaction(
+        topUpTransaction.orderId,
+        topUpTransaction.amount,
+        customerDetails
+      );
+
+      // Update transaction with new Snap token
+      const updatedTransaction = await prisma.topUpTransaction.update({
+        where: { id: topUpTransaction.id },
+        data: {
+          snapToken: midtransResponse.token,
+          midtransData: midtransResponse,
+          expiredAt: midtransService.calculateExpiryTime(), // Extend expiry
+        },
+      });
+
+      logger.info(
+        `Regenerated Snap token for transaction ${topUpTransaction.orderId}`
+      );
+
+      return {
+        transactionId: updatedTransaction.id,
+        orderId: updatedTransaction.orderId,
+        amount: updatedTransaction.amount,
+        currency: updatedTransaction.currency,
+        status: updatedTransaction.status,
+        snapToken: midtransResponse.token,
+        redirectUrl: midtransResponse.redirect_url,
+        expiresAt: updatedTransaction.expiredAt,
+      };
+    } catch (error) {
+      logger.error(
+        `Error retrying payment for transaction ${transactionId}:`,
+        error
+      );
       throw error;
     }
   },
@@ -654,6 +751,314 @@ export const invoiceService = {
       return true;
     } catch (error) {
       logger.error(`Error tracking download for invoice ${invoiceId}:`, error);
+      throw error;
+    }
+  },
+};
+
+/**
+ * Transaction Service - Manage unified transaction records
+ */
+export const transactionService = {
+  /**
+   * Create unified transaction record for top-up
+   */
+  async createTopUpTransaction(
+    userId,
+    topUpTransactionId,
+    amount,
+    paymentMethod = null,
+    paymentGateway = "MIDTRANS"
+  ) {
+    try {
+      const topUpTransaction = await prisma.topUpTransaction.findUnique({
+        where: { id: topUpTransactionId },
+        include: { user: true },
+      });
+
+      if (!topUpTransaction) {
+        throw new Error("Top-up transaction not found");
+      }
+
+      // Create unified transaction record
+      const transaction = await prisma.transaction.create({
+        data: {
+          userId,
+          type: "TOPUP",
+          status:
+            topUpTransaction.status === "PAID"
+              ? "SUCCESS"
+              : topUpTransaction.status === "PENDING"
+              ? "PENDING"
+              : topUpTransaction.status === "EXPIRED"
+              ? "EXPIRED"
+              : topUpTransaction.status === "FAILED"
+              ? "FAILED"
+              : "CANCELLED",
+          description: `Account top-up via ${
+            paymentMethod || topUpTransaction.paymentType || "payment gateway"
+          }`,
+          amount,
+          currency: "IDR",
+          referenceId: topUpTransactionId,
+          referenceType: "TOP_UP_TRANSACTION",
+          paymentGateway,
+          paymentMethod: paymentMethod || topUpTransaction.paymentType,
+        },
+      });
+
+      logger.info(
+        `Created unified transaction record for top-up ${topUpTransactionId}`
+      );
+      return transaction;
+    } catch (error) {
+      logger.error(`Error creating unified top-up transaction:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Create unified transaction record for service purchase
+   */
+  async createServicePurchaseTransaction(
+    userId,
+    subscriptionId,
+    amount,
+    serviceName
+  ) {
+    try {
+      const subscription = await prisma.subscription.findUnique({
+        where: { id: subscriptionId },
+        include: {
+          service: { select: { displayName: true } },
+          user: true,
+        },
+      });
+
+      if (!subscription) {
+        throw new Error("Subscription not found");
+      }
+
+      // Create unified transaction record
+      const transaction = await prisma.transaction.create({
+        data: {
+          userId,
+          type: "SERVICE_PURCHASE",
+          status: "SUCCESS", // Service purchases are immediately successful when balance is deducted
+          description: `${
+            serviceName || subscription.service.displayName
+          } subscription purchase`,
+          amount,
+          currency: "IDR",
+          referenceId: subscriptionId,
+          referenceType: "SUBSCRIPTION",
+          paymentGateway: "BALANCE", // Paid from user balance
+          paymentMethod: "CREDIT_BALANCE",
+        },
+      });
+
+      logger.info(
+        `Created unified transaction record for service purchase ${subscriptionId}`
+      );
+      return transaction;
+    } catch (error) {
+      logger.error(
+        `Error creating unified service purchase transaction:`,
+        error
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Update transaction status (for payment status changes)
+   */
+  async updateTransactionStatus(
+    referenceId,
+    referenceType,
+    newStatus,
+    paymentMethod = null
+  ) {
+    try {
+      const statusMapping = {
+        PAID: "SUCCESS",
+        PENDING: "PENDING",
+        EXPIRED: "EXPIRED",
+        FAILED: "FAILED",
+        CANCELLED: "CANCELLED",
+      };
+
+      const mappedStatus = statusMapping[newStatus] || newStatus;
+
+      const updateData = {
+        status: mappedStatus,
+        ...(paymentMethod && { paymentMethod }),
+      };
+
+      const transaction = await prisma.transaction.updateMany({
+        where: {
+          referenceId,
+          referenceType:
+            referenceType === "topup" ? "TOP_UP_TRANSACTION" : "SUBSCRIPTION",
+        },
+        data: updateData,
+      });
+
+      if (transaction.count > 0) {
+        logger.info(
+          `Updated unified transaction status to ${mappedStatus} for ${referenceType} ${referenceId}`
+        );
+      }
+
+      return transaction;
+    } catch (error) {
+      logger.error(`Error updating unified transaction status:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get unified transactions for user (for frontend display)
+   */
+  async getUserTransactions(
+    userId,
+    {
+      page = 1,
+      limit = 20,
+      type = null,
+      status = null,
+      startDate = null,
+      endDate = null,
+    }
+  ) {
+    try {
+      const skip = (page - 1) * limit;
+      const where = {
+        userId,
+        ...(type && { type }),
+        ...(status && { status }),
+        ...(startDate &&
+          endDate && {
+            createdAt: {
+              gte: new Date(startDate),
+              lte: new Date(endDate),
+            },
+          }),
+      };
+
+      const [transactions, total] = await Promise.all([
+        prisma.transaction.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+          include: {
+            invoice: {
+              select: { id: true, invoiceNumber: true, status: true },
+            },
+          },
+        }),
+        prisma.transaction.count({ where }),
+      ]);
+
+      // Format transactions for frontend display
+      const formattedTransactions = transactions.map((transaction) => ({
+        id: transaction.id,
+        date: transaction.createdAt,
+        type: transaction.type,
+        description: transaction.description,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        status: transaction.status,
+        reference: transaction.referenceId,
+        referenceType: transaction.referenceType,
+        paymentMethod: transaction.paymentMethod,
+        paymentGateway: transaction.paymentGateway,
+        invoice: transaction.invoice,
+        actions: {
+          canPay:
+            transaction.status === "PENDING" && transaction.type === "TOPUP",
+          canCancel: transaction.status === "PENDING",
+          canDownloadInvoice:
+            transaction.invoice && transaction.invoice.status === "PAID",
+        },
+      }));
+
+      return {
+        transactions: formattedTransactions,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      logger.error(
+        `Error getting unified transactions for user ${userId}:`,
+        error
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Get transaction details by ID
+   */
+  async getTransactionDetails(transactionId, userId) {
+    try {
+      const transaction = await prisma.transaction.findFirst({
+        where: {
+          id: transactionId,
+          userId,
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
+          invoice: true,
+        },
+      });
+
+      if (!transaction) {
+        throw new Error("Transaction not found");
+      }
+
+      return transaction;
+    } catch (error) {
+      logger.error(
+        `Error getting transaction details ${transactionId}:`,
+        error
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Link invoice to unified transaction
+   */
+  async linkInvoiceToTransaction(referenceId, referenceType, invoiceId) {
+    try {
+      const transaction = await prisma.transaction.updateMany({
+        where: {
+          referenceId,
+          referenceType:
+            referenceType === "topup" ? "TOP_UP_TRANSACTION" : "SUBSCRIPTION",
+        },
+        data: {
+          invoiceId,
+        },
+      });
+
+      if (transaction.count > 0) {
+        logger.info(
+          `Linked invoice ${invoiceId} to unified transaction for ${referenceType} ${referenceId}`
+        );
+      }
+
+      return transaction;
+    } catch (error) {
+      logger.error(`Error linking invoice to unified transaction:`, error);
       throw error;
     }
   },

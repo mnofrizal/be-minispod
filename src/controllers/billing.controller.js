@@ -2,6 +2,7 @@ import {
   balanceService,
   topUpService,
   invoiceService,
+  transactionService,
 } from "../services/billing.service.js";
 import HTTP_STATUS from "../utils/http-status.util.js";
 import { createResponse } from "../utils/response.util.js";
@@ -38,19 +39,20 @@ export const getBalance = async (req, res) => {
 };
 
 /**
- * Get balance transaction history
+ * Get unified transactions (for frontend display)
  */
-export const getBalanceHistory = async (req, res) => {
+export const getTransactions = async (req, res) => {
   try {
     const userId = req.user.id;
     const { page, limit } = req.pagination;
-    const { type } = req.query;
+    const { type, status } = req.query;
     const { startDate, endDate } = req.dateRange;
 
-    const result = await balanceService.getBalanceHistory(userId, {
+    const result = await transactionService.getUserTransactions(userId, {
       page,
       limit,
       type,
+      status,
       startDate,
       endDate,
     });
@@ -58,16 +60,74 @@ export const getBalanceHistory = async (req, res) => {
     return res
       .status(HTTP_STATUS.OK)
       .json(
-        createResponse(true, "Balance history retrieved successfully", result)
+        createResponse(true, "Transactions retrieved successfully", result)
       );
   } catch (error) {
-    logger.error("Error getting balance history:", error);
+    logger.error("Error getting unified transactions:", error);
     return res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
         createResponse(
           false,
-          "Error retrieving balance history",
+          "Error retrieving transactions",
+          null,
+          error.message
+        )
+      );
+  }
+};
+
+/**
+ * Get transaction details by ID
+ */
+export const getTransactionDetails = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const transaction = await transactionService.getTransactionDetails(
+      id,
+      userId
+    );
+
+    return res.status(HTTP_STATUS.OK).json(
+      createResponse(true, "Transaction details retrieved successfully", {
+        id: transaction.id,
+        date: transaction.createdAt,
+        type: transaction.type,
+        description: transaction.description,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        status: transaction.status,
+        reference: transaction.referenceId,
+        referenceType: transaction.referenceType,
+        paymentMethod: transaction.paymentMethod,
+        paymentGateway: transaction.paymentGateway,
+        invoice: transaction.invoice
+          ? {
+              id: transaction.invoice.id,
+              invoiceNumber: transaction.invoice.invoiceNumber,
+              status: transaction.invoice.status,
+            }
+          : null,
+        user: transaction.user,
+        actions: {
+          canPay:
+            transaction.status === "PENDING" && transaction.type === "TOPUP",
+          canCancel: transaction.status === "PENDING",
+          canDownloadInvoice:
+            transaction.invoice && transaction.invoice.status === "PAID",
+        },
+      })
+    );
+  } catch (error) {
+    logger.error("Error getting transaction details:", error);
+    return res
+      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      .json(
+        createResponse(
+          false,
+          "Error retrieving transaction details",
           null,
           error.message
         )
@@ -197,6 +257,60 @@ export const listTopUps = async (req, res) => {
           null,
           error.message
         )
+      );
+  }
+};
+
+/**
+ * Retry payment for pending transaction
+ */
+export const retryPayment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const result = await topUpService.retryPayment(id, userId);
+
+    return res.status(HTTP_STATUS.OK).json(
+      createResponse(true, "Payment retry successful", {
+        transactionId: result.transactionId,
+        orderId: result.orderId,
+        amount: result.amount,
+        currency: result.currency,
+        status: result.status,
+        snapToken: result.snapToken,
+        redirectUrl: result.redirectUrl,
+        expiresAt: result.expiresAt,
+        message: "Use the snapToken to reopen Midtrans payment window",
+      })
+    );
+  } catch (error) {
+    logger.error("Error retrying payment:", error);
+
+    // Handle specific error cases
+    if (error.message.includes("not found")) {
+      return res
+        .status(HTTP_STATUS.NOT_FOUND)
+        .json(
+          createResponse(false, "Transaction not found", null, error.message)
+        );
+    }
+
+    if (
+      error.message.includes("expired") ||
+      error.message.includes("no longer pending")
+    ) {
+      return res
+        .status(HTTP_STATUS.BAD_REQUEST)
+        .json(
+          createResponse(false, "Cannot retry payment", null, error.message)
+        );
+    }
+
+    return res
+      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      .json(
+        createResponse(false, "Error retrying payment", null, error.message)
       );
   }
 };
@@ -391,10 +505,13 @@ export const getDashboardOverview = async (req, res) => {
     const userBalance = await balanceService.getUserBalance(userId);
 
     // Get recent transactions (last 5)
-    const recentTransactions = await balanceService.getBalanceHistory(userId, {
-      page: 1,
-      limit: 5,
-    });
+    const recentTransactions = await transactionService.getUserTransactions(
+      userId,
+      {
+        page: 1,
+        limit: 5,
+      }
+    );
 
     // Get pending top-ups
     const pendingTopUps = await topUpService.listTopUps(userId, {
@@ -453,7 +570,7 @@ export const getBillingAnalytics = async (req, res) => {
     const { startDate, endDate } = req.dateRange;
 
     // Get transaction history for the period
-    const transactions = await balanceService.getBalanceHistory(userId, {
+    const transactions = await transactionService.getUserTransactions(userId, {
       page: 1,
       limit: 1000, // Get all transactions for analytics
       startDate,
@@ -462,43 +579,45 @@ export const getBillingAnalytics = async (req, res) => {
 
     // Calculate analytics
     const analytics = {
-      totalCredits: 0,
-      totalDebits: 0,
+      totalTopUps: 0,
+      totalSpending: 0,
       transactionCount: transactions.transactions.length,
       averageTopUp: 0,
       averageSpending: 0,
     };
 
-    const credits = transactions.transactions.filter(
-      (t) => t.type === "CREDIT"
+    const topUps = transactions.transactions.filter(
+      (t) => t.type === "TOPUP" && t.status === "SUCCESS"
     );
-    const debits = transactions.transactions.filter((t) => t.type === "DEBIT");
+    const purchases = transactions.transactions.filter(
+      (t) => t.type === "SERVICE_PURCHASE"
+    );
 
-    analytics.totalCredits = credits.reduce(
+    analytics.totalTopUps = topUps.reduce(
       (sum, t) => sum + parseFloat(t.amount),
       0
     );
-    analytics.totalDebits = debits.reduce(
+    analytics.totalSpending = purchases.reduce(
       (sum, t) => sum + parseFloat(t.amount),
       0
     );
     analytics.averageTopUp =
-      credits.length > 0 ? analytics.totalCredits / credits.length : 0;
+      topUps.length > 0 ? analytics.totalTopUps / topUps.length : 0;
     analytics.averageSpending =
-      debits.length > 0 ? analytics.totalDebits / debits.length : 0;
+      purchases.length > 0 ? analytics.totalSpending / purchases.length : 0;
 
     return res.status(HTTP_STATUS.OK).json(
       createResponse(true, "Billing analytics retrieved successfully", {
         period: { startDate, endDate },
         analytics,
         transactionBreakdown: {
-          credits: credits.length,
-          debits: debits.length,
-          refunds: transactions.transactions.filter((t) => t.type === "REFUND")
-            .length,
-          adjustments: transactions.transactions.filter(
-            (t) => t.type === "ADJUSTMENT"
+          topUps: topUps.length,
+          servicePurchases: purchases.length,
+          pending: transactions.transactions.filter(
+            (t) => t.status === "PENDING"
           ).length,
+          failed: transactions.transactions.filter((t) => t.status === "FAILED")
+            .length,
         },
       })
     );

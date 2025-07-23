@@ -15,17 +15,6 @@ export const createTopUpValidation = Joi.object({
   currency: Joi.string().valid("IDR").default("IDR"),
 });
 
-// Balance transaction history validation
-export const balanceHistoryValidation = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20),
-  type: Joi.string()
-    .valid("CREDIT", "DEBIT", "REFUND", "ADJUSTMENT")
-    .optional(),
-  startDate: Joi.date().iso().optional(),
-  endDate: Joi.date().iso().min(Joi.ref("startDate")).optional(),
-});
-
 // Invoice list validation
 export const invoiceListValidation = Joi.object({
   page: Joi.number().integer().min(1).default(1),
@@ -67,10 +56,25 @@ export const invoiceIdValidation = Joi.object({
   id: Joi.string().uuid().required(),
 });
 
-// Transaction list validation
+// Unified transaction list validation
 export const transactionListValidation = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
+  type: Joi.string()
+    .valid("TOPUP", "SERVICE_PURCHASE", "REFUND", "ADJUSTMENT")
+    .optional(),
+  status: Joi.string()
+    .valid("PENDING", "SUCCESS", "FAILED", "CANCELLED")
+    .optional(),
   startDate: Joi.date().iso().optional(),
   endDate: Joi.date().iso().min(Joi.ref("startDate")).optional(),
+});
+
+// Transaction ID validation (accepts CUID format)
+export const transactionIdValidation = Joi.object({
+  id: Joi.string().min(20).max(30).required().messages({
+    "string.min": "Transaction ID must be at least 20 characters",
+    "string.max": "Transaction ID must be at most 30 characters",
+    "any.required": "Transaction ID is required",
+  }),
 });

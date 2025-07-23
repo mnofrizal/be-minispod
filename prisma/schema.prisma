@@ -27,7 +27,8 @@ model User {
     balance             UserBalance?
     topUpTransactions   TopUpTransaction[]
     invoices            Invoice[]
-    balanceTransactions BalanceTransaction[]
+    balanceTransactions BalanceTransaction[] // To be deprecated
+    transactions        Transaction[]
 
     @@map("users")
 }
@@ -82,12 +83,12 @@ model Subscription {
     updatedAt DateTime @updatedAt
 
     // Relations
-    user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-    service         ServiceCatalog   @relation(fields: [serviceId], references: [id])
-    serviceInstance ServiceInstance?
-    transactions    Transaction[]
-    usageMetrics    UsageMetric[]
-    invoice         Invoice?
+    user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    service                  ServiceCatalog            @relation(fields: [serviceId], references: [id])
+    serviceInstance          ServiceInstance?
+    subscriptionTransactions SubscriptionTransaction[]
+    usageMetrics             UsageMetric[]
+    invoice                  Invoice?
 
     @@map("subscriptions")
 }
@@ -141,16 +142,16 @@ model UsageMetric {
     @@map("usage_metrics")
 }
 
-// Transaction history for billing
-model Transaction {
+// Subscription-specific transaction history (renamed from Transaction)
+model SubscriptionTransaction {
     id             String @id @default(cuid())
     subscriptionId String
 
     // Transaction details
-    type        TransactionType
-    amount      Decimal           @default(0)
-    currency    String            @default("IDR")
-    status      TransactionStatus @default(PENDING)
+    type        SubscriptionTransactionType
+    amount      Decimal                       @default(0)
+    currency    String                        @default("IDR")
+    status      SubscriptionTransactionStatus @default(PENDING)
     description String?
 
     // Payment gateway details
@@ -162,6 +163,37 @@ model Transaction {
 
     // Relations
     subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+    @@map("subscription_transactions")
+}
+
+// Unified Transaction model for frontend billing page
+model Transaction {
+    id          String            @id @default(cuid())
+    userId      String
+    type        TransactionType   @default(TOPUP)
+    status      TransactionStatus @default(PENDING)
+    description String
+    amount      Decimal           @db.Decimal(10, 2)
+    currency    String            @default("IDR")
+
+    // Reference to related entities
+    referenceId   String? // Links to TopUpTransaction or Subscription ID
+    referenceType String? // "TOPUP" or "SUBSCRIPTION"
+
+    // Payment gateway details
+    paymentGateway String? @default("midtrans") // "midtrans", "manual", etc.
+    paymentMethod  String? // "credit_card", "bank_transfer", etc.
+
+    // Invoice relation
+    invoiceId String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    invoice Invoice? @relation(fields: [invoiceId], references: [id])
 
     @@map("transactions")
 }
@@ -339,6 +371,7 @@ model Invoice {
     user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
     topUpTransaction TopUpTransaction? @relation(fields: [topUpTransactionId], references: [id])
     subscription     Subscription?     @relation(fields: [subscriptionId], references: [id])
+    transactions     Transaction[] // Link to unified transactions
 
     @@map("invoices")
 }
@@ -414,14 +447,31 @@ enum PodStatus {
     UNKNOWN
 }
 
+// New unified transaction enums
 enum TransactionType {
+    TOPUP // User top-up balance
+    SERVICE_PURCHASE // User purchases/subscribes to a service
+    REFUND // Refund to user
+    ADJUSTMENT // Manual adjustment
+}
+
+enum TransactionStatus {
+    PENDING // Waiting for payment/processing
+    SUCCESS // Successfully completed
+    FAILED // Failed to process
+    CANCELLED // Cancelled by user or system
+    EXPIRED // Payment expired
+}
+
+// Subscription-specific transaction enums (renamed from original)
+enum SubscriptionTransactionType {
     SUBSCRIPTION
     RENEWAL
     REFUND
     CREDIT
 }
 
-enum TransactionStatus {
+enum SubscriptionTransactionStatus {
     PENDING
     COMPLETED
     FAILED

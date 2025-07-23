@@ -2,9 +2,9 @@
 
 ## Project Status
 
-**Phase**: Phase 2 COMPLETE - Credit-Based Billing System with Midtrans Integration
-**Last Updated**: 2025-07-22
-**Current Focus**: Complete credit-based billing system implemented with Midtrans payment gateway integration, replacing direct payment model with top-up balance system. Production-ready with comprehensive documentation and troubleshooting guides.
+**Phase**: Phase 2 COMPLETE - Enhanced Credit-Based Billing System with Unified Transactions
+**Last Updated**: 2025-07-23
+**Current Focus**: Complete credit-based billing system with unified transaction model, CUID validation fixes, and enhanced payment functionality. Includes Midtrans payment gateway integration with improved user experience and semantic API endpoints.
 
 ## Current State
 
@@ -144,6 +144,9 @@ rest/
 - **Dashboard Analytics**: Comprehensive billing overview and transaction analytics
 - **Multi-currency Support**: IDR currency with configurable limits (IDR 10K-10M)
 - **Audit Trail**: Complete transaction logging for compliance and debugging
+- **Unified Transaction System**: Single source of truth for all user-facing financial activities
+- **CUID Validation**: Proper validation for Prisma-generated CUID format transaction IDs
+- **Semantic API Endpoints**: User-friendly `/pay` endpoint for completing pending transactions
 
 **Midtrans Integration Features:**
 
@@ -268,6 +271,10 @@ rest/
 18. **Real Data Integration**: Extracts actual worker specifications from Kubernetes cluster
 19. **Payment Security**: PCI DSS compliance, webhook signature validation, and secure transaction processing
 20. **Comprehensive Documentation**: Complete integration guides, troubleshooting, and quick start documentation
+21. **Unified Transaction System**: Single source of truth for all user-facing financial activities with consistent data format
+22. **CUID Validation System**: Proper validation handling for Prisma-generated CUID format IDs across all transaction endpoints
+23. **Semantic API Design**: User-friendly endpoint naming with `/pay` for payment completion instead of technical `/retry`
+24. **Transaction Bug Fixes**: Eliminated duplicate transaction creation and validation mismatches for reliable billing operations
 
 ## Current Blockers
 

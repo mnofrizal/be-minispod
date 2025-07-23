@@ -1,10 +1,12 @@
 import express from "express";
 import {
   getBalance,
-  getBalanceHistory,
+  getTransactions,
+  getTransactionDetails,
   createTopUp,
   getTopUpDetails,
   listTopUps,
+  retryPayment,
   listInvoices,
   getInvoiceDetails,
   downloadInvoicePDF,
@@ -25,12 +27,12 @@ import {
 import { validate } from "../utils/validation.util.js";
 import {
   createTopUpValidation,
-  balanceHistoryValidation,
   invoiceListValidation,
   midtransWebhookValidation,
   topUpIdValidation,
   invoiceIdValidation,
   transactionListValidation,
+  transactionIdValidation,
 } from "../validations/billing.validation.js";
 
 const router = express.Router();
@@ -45,17 +47,6 @@ router.get(
   authenticate,
   logBillingOperation("get_balance"),
   getBalance
-);
-
-// GET /api/v1/billing/balance/history - Get balance transaction history
-router.get(
-  "/balance/history",
-  authenticate,
-  validatePagination,
-  validateDateRange,
-  validate(balanceHistoryValidation),
-  logBillingOperation("get_balance_history"),
-  getBalanceHistory
 );
 
 /**
@@ -90,6 +81,16 @@ router.get(
   validatePagination,
   logBillingOperation("list_topups"),
   listTopUps
+);
+
+// POST /api/v1/billing/transactions/:id/pay - Pay for pending transaction
+router.post(
+  "/transactions/:id/pay",
+  authenticate,
+  validate(transactionIdValidation, "params"), // Use correct transaction ID validation
+  rateLimitPayments,
+  logBillingOperation("retry_payment"),
+  retryPayment
 );
 
 /**
@@ -152,15 +153,24 @@ router.get(
  * Transaction Routes
  */
 
-// GET /api/v1/billing/transactions - Get all transaction history
+// GET /api/v1/billing/transactions - Get unified transaction history
 router.get(
   "/transactions",
   authenticate,
   validatePagination,
   validateDateRange,
   validate(transactionListValidation),
-  logBillingOperation("get_all_transactions"),
-  getBalanceHistory // Reuse balance history controller
+  logBillingOperation("get_unified_transactions"),
+  getTransactions
+);
+
+// GET /api/v1/billing/transactions/:id - Get transaction details
+router.get(
+  "/transactions/:id",
+  authenticate,
+  validate(transactionIdValidation, "params"), // Use correct transaction ID validation
+  logBillingOperation("get_transaction_details"),
+  getTransactionDetails
 );
 
 /**

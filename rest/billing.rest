@@ -2,7 +2,7 @@
 ### Base URL: http://localhost:3000/api/v1/billing
 
 @baseUrl = http://localhost:3000/api/v1
-@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkZTM2NGUwMDAxMTFqNTlvZWZ5cHE3IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMjAyNjYxLCJleHAiOjE3NTMyODkwNjEsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.9KR5YMNcp3BdAI52RkaQcgmWjwigPPWesN54ATA2hoY
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkdHJiNWYwMDAxYTY3cWQ0aHFrOTlnIiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMjU2MTQ4LCJleHAiOjE3NTMzNDI1NDgsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.laRAVRTvgMJflN-Xt0xyMkDbMN8h_U31wCveLGlaCF4
 
 ### Health Check
 GET {{baseUrl}}/billing/health
@@ -30,13 +30,6 @@ Content-Type: application/json
 GET {{baseUrl}}/billing/balance
 Authorization: Bearer {{authToken}}
 
-### Get Balance History
-GET {{baseUrl}}/billing/balance/history?page=1&limit=10
-Authorization: Bearer {{authToken}}
-
-### Get Balance History with Filters
-GET {{baseUrl}}/billing/balance/history?page=1&limit=10&type=CREDIT&startDate=2024-01-01&endDate=2024-12-31
-Authorization: Bearer {{authToken}}
 
 ### ===========================================
 ### TOP-UP MANAGEMENT
@@ -97,15 +90,35 @@ GET {{baseUrl}}/billing/dashboard/analytics?startDate=2024-01-01&endDate=2024-12
 Authorization: Bearer {{authToken}}
 
 ### ===========================================
-### TRANSACTION HISTORY
+### UNIFIED TRANSACTION HISTORY (NEW)
 ### ===========================================
 
-### Get All Transactions
+### Get All Unified Transactions (Recommended)
 GET {{baseUrl}}/billing/transactions?page=1&limit=20
 Authorization: Bearer {{authToken}}
 
-### Get Transactions with Date Filter
-GET {{baseUrl}}/billing/transactions?page=1&limit=20&startDate=2024-01-01&endDate=2024-12-31
+### Get Transactions with Filters
+GET {{baseUrl}}/billing/transactions?page=1&limit=20&type=TOPUP&status=SUCCESS&startDate=2024-01-01&endDate=2024-12-31
+Authorization: Bearer {{authToken}}
+
+### Get Transaction Details by ID
+GET {{baseUrl}}/billing/transactions/{{transactionId}}
+Authorization: Bearer {{authToken}}
+
+### Get Transactions by Type
+GET {{baseUrl}}/billing/transactions?page=1&limit=10&type=TOPUP
+Authorization: Bearer {{authToken}}
+
+### Get Transactions by Status
+GET {{baseUrl}}/billing/transactions?page=1&limit=10&status=PENDING
+Authorization: Bearer {{authToken}}
+
+### Get Service Purchase Transactions
+GET {{baseUrl}}/billing/transactions?page=1&limit=10&type=SERVICE_PURCHASE
+Authorization: Bearer {{authToken}}
+
+### Pay for Pending Transaction
+POST {{baseUrl}}/billing/transactions/{{transactionId}}/pay
 Authorization: Bearer {{authToken}}
 
 ### ===========================================
@@ -227,7 +240,44 @@ Content-Type: application/json
 # @invoiceId = get from invoice list response
 # @serviceId = get from service catalog
 # @userId = get from user profile
+# @transactionId = get from unified transactions list response
 
 ### Example: Set variables from responses
 # @topupId = {{createTopup.response.body.data.transactionId}}
 # @invoiceId = {{listInvoices.response.body.data.invoices[0].id}}
+# @transactionId = {{getTransactions.response.body.data.transactions[0].id}}
+
+### ===========================================
+### SAMPLE DATA FROM SEEDER (for testing)
+### ===========================================
+
+# Sample Transaction IDs from seeded data:
+# Top-up transactions: Check the unified transactions endpoint
+# Service purchase transactions: Check the unified transactions endpoint
+# Sample User ID: cmdde364e000111j59oefypq7 (admin user)
+# Sample Service ID: cmdde35wt000011j5yxb0eekx (N8N service)
+
+### ===========================================
+### UNIFIED TRANSACTION SYSTEM
+### ===========================================
+
+# UNIFIED ENDPOINTS:
+# - GET /billing/transactions (unified transaction list)
+# - GET /billing/transactions/:id (transaction details)
+# - POST /billing/transactions/:id/pay (pay for pending transactions)
+#
+# BENEFITS OF UNIFIED SYSTEM:
+# - Single source of truth for all user transactions
+# - Consistent data format for frontend display
+# - Includes both top-ups and service purchases
+# - Better filtering and pagination support
+# - Action buttons support (pay, cancel, download invoice)
+# - Complete transaction lifecycle tracking
+# - Pay functionality for closed Midtrans windows
+#
+# PAY WORKFLOW:
+# 1. User sees pending transaction with "canPay": true
+# 2. Frontend calls POST /billing/transactions/:id/pay
+# 3. Backend returns existing or new Snap token
+# 4. Frontend reopens Midtrans payment window with the token
+# 5. User completes payment, webhook updates transaction status

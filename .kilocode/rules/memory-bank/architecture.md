@@ -16,6 +16,7 @@ The backend is designed as a **microservices-oriented monolith** using Express.j
 - **Admin User Management**: Complete CRUD operations for user administration
 - **Service Catalog Management**: Full service catalog system with public and admin endpoints
 - **Production-Ready Worker Management**: Advanced Kubernetes worker node monitoring with auto-registration, realtime heartbeats, and proper architectural patterns
+- **Credit-Based Billing System**: Complete billing system with Midtrans integration, unified transactions, and CUID validation
 - **Database Layer**: PostgreSQL with Prisma ORM, centralized configuration
 - **Security Middleware**: Password hashing, JWT validation, rate limiting
 - **Role System**: Simplified USER and ADMINISTRATOR roles with constants
@@ -33,29 +34,37 @@ src/
 │   ├── auth.controller.js       # ✅ Authentication request handlers
 │   ├── user.controller.js       # ✅ Admin user management handlers
 │   ├── service.controller.js    # ✅ Service catalog handlers
-│   └── worker.controller.js     # ✅ Worker node management with ID/name resolution
+│   ├── worker.controller.js     # ✅ Worker node management with ID/name resolution
+│   └── billing.controller.js    # ✅ Billing operations (balance, top-up, invoices, unified transactions)
 ├── middleware/
 │   ├── auth.middleware.js       # ✅ JWT authentication & authorization
-│   └── error.middleware.js      # ✅ Global error handling
+│   ├── error.middleware.js      # ✅ Global error handling
+│   └── billing.middleware.js    # ✅ Balance validation and payment security
 ├── routes/
 │   ├── auth.routes.js          # ✅ Authentication endpoints
 │   ├── users.routes.js         # ✅ User management with validation
 │   ├── services.routes.js      # ✅ Service catalog with validation
 │   ├── workers.routes.js       # ✅ Worker node management with flexible validation
-│   ├── subscriptions.routes.js # 🔄 Placeholder (Phase 2)
+│   ├── billing.routes.js       # ✅ Billing system endpoints with unified transactions
+│   ├── subscriptions.routes.js # ✅ Subscription management with credit-based flow
 │   └── pods.routes.js          # 🔄 Placeholder (Phase 2)
 ├── services/
 │   ├── auth.service.js         # ✅ Authentication business logic
 │   ├── user.service.js         # ✅ User management business logic
 │   ├── service.service.js      # ✅ Service catalog business logic
-│   └── worker.service.js       # ✅ Worker node management with focused functions
+│   ├── worker.service.js       # ✅ Worker node management with focused functions
+│   ├── billing.service.js      # ✅ Balance, top-up, and unified transaction management
+│   ├── midtrans.service.js     # ✅ Midtrans payment gateway integration
+│   └── subscription.service.js # ✅ Credit-based subscription lifecycle
 ├── validations/
 │   ├── auth.validation.js      # ✅ Authentication validation schemas
 │   ├── user.validation.js      # ✅ User management validation schemas
 │   ├── service.validation.js   # ✅ Service catalog validation schemas
-│   └── worker.validation.js    # ✅ Worker node validation with flexible schemas
+│   ├── worker.validation.js    # ✅ Worker node validation with flexible schemas
+│   └── billing.validation.js   # ✅ Billing operations validation with CUID support
 ├── jobs/
 │   ├── health-monitor.job.js   # ✅ Background health monitoring job
+│   ├── billing.jobs.js         # ✅ Payment processing and billing automation
 │   └── job-scheduler.js        # ✅ Job scheduling system
 ├── utils/
 │   ├── crypto.util.js          # ✅ Password hashing utilities
@@ -68,7 +77,7 @@ src/
     └── database.js             # ✅ Centralized Prisma configuration
 
 prisma/
-├── schema.prisma               # ✅ Database schema with User, ServiceCatalog, and WorkerNode models
+├── schema.prisma               # ✅ Database schema with User, ServiceCatalog, WorkerNode, and unified Transaction models
 ├── seed.js                     # ✅ Database seeding with test data
 └── migrations/                 # ✅ Database migration files
 
@@ -80,7 +89,7 @@ rest/
 ├── user.rest                   # ✅ User management API testing
 ├── service.rest                # ✅ Service catalog API testing
 ├── worker.rest                 # ✅ Worker node management API testing
-└── worker-registration.rest    # ✅ Worker auto-registration API testing
+└── billing.rest                # ✅ Billing system API testing with unified transactions
 
 # Development Scripts
 ├── auto-register-workers.js         # ✅ k3d worker auto-registration script

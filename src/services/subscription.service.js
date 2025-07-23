@@ -1,5 +1,9 @@
 import { prisma } from "../config/database.js";
-import { balanceService, invoiceService } from "./billing.service.js";
+import {
+  balanceService,
+  invoiceService,
+  transactionService,
+} from "./billing.service.js";
 import logger from "../utils/logger.util.js";
 
 /**
@@ -86,13 +90,31 @@ export const subscriptionService = {
         );
 
         // 8. Generate invoice
-        await invoiceService.generateInvoice(
+        const invoice = await invoiceService.generateInvoice(
           userId,
           "SUBSCRIPTION",
           monthlyPrice,
           subscription.id,
           "subscription"
         );
+
+        // 9. Create unified transaction record
+        const unifiedTransaction =
+          await transactionService.createServicePurchaseTransaction(
+            userId,
+            subscription.id,
+            monthlyPrice,
+            service.displayName
+          );
+
+        // 10. Link invoice to unified transaction
+        if (invoice && unifiedTransaction) {
+          await transactionService.linkInvoiceToTransaction(
+            subscription.id,
+            "subscription",
+            invoice.id
+          );
+        }
 
         logger.info(
           `Created subscription ${subscription.id} for user ${userId}, service ${service.displayName}`
@@ -178,13 +200,31 @@ export const subscriptionService = {
         );
 
         // 6. Generate renewal invoice
-        await invoiceService.generateInvoice(
+        const invoice = await invoiceService.generateInvoice(
           userId,
           "SUBSCRIPTION",
           monthlyPrice,
           subscriptionId,
           "subscription"
         );
+
+        // 7. Create unified transaction record for renewal
+        const unifiedTransaction =
+          await transactionService.createServicePurchaseTransaction(
+            userId,
+            subscriptionId,
+            monthlyPrice,
+            `${subscription.service.displayName} (Renewal)`
+          );
+
+        // 8. Link invoice to unified transaction
+        if (invoice && unifiedTransaction) {
+          await transactionService.linkInvoiceToTransaction(
+            subscriptionId,
+            "subscription",
+            invoice.id
+          );
+        }
 
         logger.info(
           `Renewed subscription ${subscriptionId} for user ${userId}`

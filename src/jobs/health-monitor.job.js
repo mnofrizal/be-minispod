@@ -179,11 +179,22 @@ const cleanupOldRecords = async () => {
 const updateWorkerMetrics = async () => {
   try {
     // Calculate cluster-wide statistics
+    // Note: totalMemory, totalStorage, allocatedCPU, allocatedMemory, allocatedStorage are String fields
+    // We can only aggregate numeric fields (cpuCores, currentPods, maxPods)
     const stats = await prisma.workerNode.aggregate({
       _count: {
         id: true,
       },
       _sum: {
+        cpuCores: true,
+        currentPods: true,
+        maxPods: true,
+      },
+    });
+
+    // Get all worker nodes to manually calculate string field totals
+    const allNodes = await prisma.workerNode.findMany({
+      select: {
         cpuCores: true,
         totalMemory: true,
         totalStorage: true,
@@ -192,39 +203,98 @@ const updateWorkerMetrics = async () => {
         allocatedStorage: true,
         currentPods: true,
         maxPods: true,
+        status: true,
       },
     });
 
     const totalNodes = stats._count.id || 0;
     const totalCPU = stats._sum.cpuCores || 0;
-    const totalMemory = stats._sum.totalMemory || 0;
-    const totalStorage = stats._sum.totalStorage || 0;
-    const allocatedCPU = stats._sum.allocatedCPU || 0;
-    const allocatedMemory = stats._sum.allocatedMemory || 0;
-    const allocatedStorage = stats._sum.allocatedStorage || 0;
     const currentPods = stats._sum.currentPods || 0;
     const maxPods = stats._sum.maxPods || 0;
 
+    // Helper function to parse memory/storage strings (e.g., "32Gi", "1Ti", "500Mi")
+    const parseResourceString = (resourceStr) => {
+      if (!resourceStr || resourceStr === "0") return 0;
+
+      const match = resourceStr.match(/^(\d+(?:\.\d+)?)(.*)?$/);
+      if (!match) return 0;
+
+      const value = parseFloat(match[1]);
+      const unit = (match[2] || "").toLowerCase();
+
+      // Convert to GB for consistency
+      switch (unit) {
+        case "ki":
+          return value / 1024 / 1024; // KiB to GB
+        case "mi":
+          return value / 1024; // MiB to GB
+        case "gi":
+          return value; // GiB to GB
+        case "ti":
+          return value * 1024; // TiB to GB
+        case "k":
+          return value / 1000 / 1000; // KB to GB
+        case "m":
+          return value / 1000; // MB to GB
+        case "g":
+          return value; // GB to GB
+        case "t":
+          return value * 1000; // TB to GB
+        default:
+          return value; // Assume GB if no unit
+      }
+    };
+
+    // Calculate totals from string fields
+    let totalMemoryGB = 0;
+    let totalStorageGB = 0;
+    let allocatedCPUCores = 0;
+    let allocatedMemoryGB = 0;
+    let allocatedStorageGB = 0;
+    let activeNodes = 0;
+
+    allNodes.forEach((node) => {
+      if (node.status === "ACTIVE") {
+        activeNodes++;
+      }
+
+      totalMemoryGB += parseResourceString(node.totalMemory);
+      totalStorageGB += parseResourceString(node.totalStorage);
+      allocatedCPUCores += parseFloat(node.allocatedCPU || 0);
+      allocatedMemoryGB += parseResourceString(node.allocatedMemory);
+      allocatedStorageGB += parseResourceString(node.allocatedStorage);
+    });
+
     // Calculate utilization percentages
     const cpuUtilization =
-      totalCPU > 0 ? ((allocatedCPU / totalCPU) * 100).toFixed(2) : 0;
+      totalCPU > 0 ? ((allocatedCPUCores / totalCPU) * 100).toFixed(2) : 0;
     const memoryUtilization =
-      totalMemory > 0 ? ((allocatedMemory / totalMemory) * 100).toFixed(2) : 0;
+      totalMemoryGB > 0
+        ? ((allocatedMemoryGB / totalMemoryGB) * 100).toFixed(2)
+        : 0;
     const storageUtilization =
-      totalStorage > 0
-        ? ((allocatedStorage / totalStorage) * 100).toFixed(2)
+      totalStorageGB > 0
+        ? ((allocatedStorageGB / totalStorageGB) * 100).toFixed(2)
         : 0;
     const podUtilization =
       maxPods > 0 ? ((currentPods / maxPods) * 100).toFixed(2) : 0;
 
     logger.info(
-      `Cluster metrics updated - Nodes: ${totalNodes}, CPU: ${cpuUtilization}%, Memory: ${memoryUtilization}%, Storage: ${storageUtilization}%, Pods: ${podUtilization}%`
+      `Cluster metrics updated - Total Nodes: ${totalNodes}, Active Nodes: ${activeNodes}, ` +
+        `CPU: ${allocatedCPUCores}/${totalCPU} cores (${cpuUtilization}%), ` +
+        `Memory: ${allocatedMemoryGB.toFixed(1)}/${totalMemoryGB.toFixed(
+          1
+        )} GB (${memoryUtilization}%), ` +
+        `Storage: ${allocatedStorageGB.toFixed(1)}/${totalStorageGB.toFixed(
+          1
+        )} GB (${storageUtilization}%), ` +
+        `Pods: ${currentPods}/${maxPods} (${podUtilization}%)`
     );
 
     // Here you could store these metrics in a separate metrics table for historical tracking
     // For now, we just log them
   } catch (error) {
-    logger.error("Error updating worker metrics:", error);
+    logger.error("Metrics update job failed:", error);
     throw error;
   }
 };

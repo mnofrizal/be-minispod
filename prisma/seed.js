@@ -178,14 +178,225 @@ async function main() {
     console.log(`✅ Created worker node: ${node.name}`);
   }
 
+  // Create user balance for test customer
+  console.log("💰 Creating user balance...");
+
+  const userBalance = await prisma.userBalance.upsert({
+    where: { userId: customerUser.id },
+    update: {},
+    create: {
+      userId: customerUser.id,
+      balance: 150000, // IDR 150,000
+      currency: "IDR",
+    },
+  });
+
+  console.log(`✅ Created user balance: IDR ${userBalance.balance}`);
+
+  // Create sample top-up transactions
+  console.log("💳 Creating sample top-up transactions...");
+
+  const topUpTransaction1 = await prisma.topUpTransaction.create({
+    data: {
+      userId: customerUser.id,
+      amount: 100000, // IDR 100,000
+      currency: "IDR",
+      status: "PAID",
+      orderId: "TOPUP-2024-001",
+      snapToken: "snap-token-123",
+      paymentType: "bank_transfer",
+      transactionId: "midtrans-txn-001",
+      paidAt: new Date("2024-01-15T10:30:00Z"),
+      expiredAt: new Date("2024-01-16T10:30:00Z"),
+      midtransData: {
+        transaction_status: "settlement",
+        payment_type: "bank_transfer",
+        gross_amount: "100000.00",
+        bank: "bca",
+      },
+    },
+  });
+
+  const topUpTransaction2 = await prisma.topUpTransaction.create({
+    data: {
+      userId: customerUser.id,
+      amount: 50000, // IDR 50,000
+      currency: "IDR",
+      status: "PAID",
+      orderId: "TOPUP-2024-002",
+      snapToken: "snap-token-456",
+      paymentType: "credit_card",
+      transactionId: "midtrans-txn-002",
+      paidAt: new Date("2024-01-20T14:15:00Z"),
+      expiredAt: new Date("2024-01-21T14:15:00Z"),
+      midtransData: {
+        transaction_status: "capture",
+        payment_type: "credit_card",
+        gross_amount: "50000.00",
+        masked_card: "481111-1114",
+      },
+    },
+  });
+
+  console.log(
+    `✅ Created top-up transactions: ${topUpTransaction1.orderId}, ${topUpTransaction2.orderId}`
+  );
+
+  // Create sample subscription
+  console.log("📋 Creating sample subscription...");
+
+  const subscription = await prisma.subscription.create({
+    data: {
+      userId: customerUser.id,
+      serviceId: n8nService.id,
+      status: "ACTIVE",
+      startDate: new Date("2024-01-22T09:00:00Z"),
+      expiresAt: new Date("2024-02-22T09:00:00Z"),
+      subdomain: "customer-n8n-001",
+    },
+  });
+
+  console.log(`✅ Created subscription: ${subscription.subdomain}`);
+
+  // Create unified transactions for frontend
+  console.log("🔄 Creating unified transactions...");
+
+  const transactions = [
+    // Top-up transaction 1
+    {
+      userId: customerUser.id,
+      type: "TOPUP",
+      status: "SUCCESS",
+      description: "Top-up via Bank Transfer (BCA)",
+      amount: 100000,
+      currency: "IDR",
+      referenceId: topUpTransaction1.id,
+      referenceType: "TOPUP",
+      paymentGateway: "midtrans",
+      paymentMethod: "bank_transfer",
+      createdAt: new Date("2024-01-15T10:30:00Z"),
+    },
+    // Top-up transaction 2
+    {
+      userId: customerUser.id,
+      type: "TOPUP",
+      status: "SUCCESS",
+      description: "Top-up via Credit Card",
+      amount: 50000,
+      currency: "IDR",
+      referenceId: topUpTransaction2.id,
+      referenceType: "TOPUP",
+      paymentGateway: "midtrans",
+      paymentMethod: "credit_card",
+      createdAt: new Date("2024-01-20T14:15:00Z"),
+    },
+    // Service purchase transaction
+    {
+      userId: customerUser.id,
+      type: "SERVICE_PURCHASE",
+      status: "SUCCESS",
+      description: "N8N Workflow Automation - Monthly Subscription",
+      amount: 25000, // IDR 25,000 monthly fee
+      currency: "IDR",
+      referenceId: subscription.id,
+      referenceType: "SUBSCRIPTION",
+      paymentGateway: "balance",
+      paymentMethod: "balance_deduction",
+      createdAt: new Date("2024-01-22T09:00:00Z"),
+    },
+    // Pending top-up transaction
+    {
+      userId: customerUser.id,
+      type: "TOPUP",
+      status: "PENDING",
+      description: "Top-up via E-Wallet (GoPay) - Pending Payment",
+      amount: 75000,
+      currency: "IDR",
+      referenceId: null, // No reference yet as it's pending
+      referenceType: "TOPUP",
+      paymentGateway: "midtrans",
+      paymentMethod: "gopay",
+      createdAt: new Date("2024-01-25T16:45:00Z"),
+    },
+  ];
+
+  for (const transactionData of transactions) {
+    const transaction = await prisma.transaction.create({
+      data: transactionData,
+    });
+    console.log(
+      `✅ Created transaction: ${transaction.type} - ${transaction.description}`
+    );
+  }
+
+  // Create balance transactions (for backward compatibility)
+  console.log("📊 Creating balance transactions...");
+
+  const balanceTransactions = [
+    {
+      userId: customerUser.id,
+      type: "CREDIT",
+      amount: 100000,
+      balanceBefore: 0,
+      balanceAfter: 100000,
+      description: "Top-up via bank_transfer",
+      topUpTransactionId: topUpTransaction1.id,
+      createdAt: new Date("2024-01-15T10:30:00Z"),
+    },
+    {
+      userId: customerUser.id,
+      type: "CREDIT",
+      amount: 50000,
+      balanceBefore: 100000,
+      balanceAfter: 150000,
+      description: "Top-up via credit_card",
+      topUpTransactionId: topUpTransaction2.id,
+      createdAt: new Date("2024-01-20T14:15:00Z"),
+    },
+    {
+      userId: customerUser.id,
+      type: "DEBIT",
+      amount: 25000,
+      balanceBefore: 150000,
+      balanceAfter: 125000,
+      description: "N8N Workflow Automation subscription",
+      subscriptionId: subscription.id,
+      createdAt: new Date("2024-01-22T09:00:00Z"),
+    },
+  ];
+
+  for (const balanceTransactionData of balanceTransactions) {
+    const balanceTransaction = await prisma.balanceTransaction.create({
+      data: balanceTransactionData,
+    });
+    console.log(
+      `✅ Created balance transaction: ${balanceTransaction.type} - IDR ${balanceTransaction.amount}`
+    );
+  }
+
+  // Update user balance to reflect final amount
+  await prisma.userBalance.update({
+    where: { userId: customerUser.id },
+    data: { balance: 125000 }, // After deducting subscription fee
+  });
+
   console.log("🎉 Database seeding completed successfully!");
   console.log("\n📋 Seeded data summary:");
   console.log("- Services: 1 (N8N)");
   console.log("- Users: 2 (1 admin, 1 customer)");
   console.log("- Worker Nodes: 3");
+  console.log("- Top-up Transactions: 2");
+  console.log("- Subscriptions: 1");
+  console.log("- Unified Transactions: 4");
+  console.log("- Balance Transactions: 3");
+  console.log("- User Balance: IDR 125,000");
   console.log("\n🔐 Test credentials:");
   console.log("Admin: admin@paas.com / Admin123!@#");
   console.log("Customer: customer@test.com / Customer123!@#");
+  console.log("\n💰 Sample transaction data:");
+  console.log("- 2 successful top-ups (bank transfer, credit card)");
+  console.log("- 1 service purchase (N8N subscription)");
+  console.log("- 1 pending top-up (GoPay)");
 }
 
 main()
