@@ -1,18 +1,12 @@
-### Worker Management API Testing
-### Base URL: http://localhost:3000/api/workers
-### All endpoints require admin authentication
+### Worker Node Management API Tests
+### Kubernetes-Integrated Worker Management
+### All endpoints provide real-time cluster data
 
-### Variables
 @baseUrl = http://localhost:3000/api/v1
-@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkZTM2NGUwMDAxMTFqNTlvZWZ5cHE3IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMTkxNTk3LCJleHAiOjE3NTMyNzc5OTcsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.-4NoVttDAl0OdAXfU-1USrNfQboAUUYPS2IwwKuW5fc
-@nodeId = worker-node-id-here
-@nodeName = worker-node-name-here
+@adminToken = {{login_response.response.body.data.tokens.accessToken}}
 
-### ============================================
-### AUTHENTICATION SETUP (Run this first)
-### ============================================
-
-### Admin Login (Get admin token first)
+### Login to get access token
+# @name login_response
 POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
@@ -20,399 +14,208 @@ Content-Type: application/json
   "email": "admin@paas.com",
   "password": "Admin123!@#"
 }
+### =============================================================================
+### CLUSTER MANAGEMENT
+### =============================================================================
 
+### Sync cluster state with database
+POST {{baseUrl}}/workers/sync
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
 
-### ============================================
-### WORKER NODE STATISTICS & OVERVIEW
-### ============================================
-
-### Get worker node statistics
+### Get real-time cluster statistics
 GET {{baseUrl}}/workers/stats
 Authorization: Bearer {{adminToken}}
 
-### Get online worker nodes
-GET {{baseUrl}}/workers/online
-Authorization: Bearer {{adminToken}}
+### =============================================================================
+### WORKER NODE QUERIES (Real-time Kubernetes data)
+### =============================================================================
 
-### Get offline worker nodes
-GET {{baseUrl}}/workers/offline
-Authorization: Bearer {{adminToken}}
-
-### ============================================
-### WORKER NODE LISTING & FILTERING
-### ============================================
-
-### Get all worker nodes (default pagination)
+### Get all worker nodes with live Kubernetes data
 GET {{baseUrl}}/workers
 Authorization: Bearer {{adminToken}}
 
-### Get worker nodes with pagination
+### Get all worker nodes with pagination
 GET {{baseUrl}}/workers?page=1&limit=5
 Authorization: Bearer {{adminToken}}
 
-### Filter by status - ACTIVE nodes
-GET {{baseUrl}}/workers?status=ACTIVE
+### Get worker nodes with filters
+GET {{baseUrl}}/workers?status=ACTIVE&isReady=true&isSchedulable=true
 Authorization: Bearer {{adminToken}}
 
-### Filter by status - INACTIVE nodes
-GET {{baseUrl}}/workers?status=INACTIVE
+### Search worker nodes
+GET {{baseUrl}}/workers?search=worker&sortBy=name&sortOrder=asc
 Authorization: Bearer {{adminToken}}
 
-### Filter by status - MAINTENANCE nodes
-GET {{baseUrl}}/workers?status=MAINTENANCE
+### Get online worker nodes (from live cluster)
+GET {{baseUrl}}/workers/online
 Authorization: Bearer {{adminToken}}
 
-### Filter by status - PENDING nodes
-GET {{baseUrl}}/workers?status=PENDING
+### Get offline worker nodes (from live cluster)
+GET {{baseUrl}}/workers/offline
 Authorization: Bearer {{adminToken}}
 
-### Filter by status - NOT_READY nodes
-GET {{baseUrl}}/workers?status=NOT_READY
+### =============================================================================
+### INDIVIDUAL WORKER NODE OPERATIONS
+### =============================================================================
+
+### Get worker node by ID with live Kubernetes data
+GET {{baseUrl}}/workers/cmdg67pz
 Authorization: Bearer {{adminToken}}
 
-### Filter by schedulable status - schedulable nodes
-GET {{baseUrl}}/workers?isSchedulable=true
+### Get worker node by name with live Kubernetes data
+GET {{baseUrl}}/workers/i6700
 Authorization: Bearer {{adminToken}}
 
-### Filter by schedulable status - non-schedulable nodes
-GET {{baseUrl}}/workers?isSchedulable=false
+### =============================================================================
+### KUBERNETES NODE OPERATIONS
+### =============================================================================
+
+### Cordon node (make unschedulable)
+POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/cordon
 Authorization: Bearer {{adminToken}}
+Content-Type: application/json
 
-### Filter by ready status - ready nodes
-GET {{baseUrl}}/workers?isReady=true
+### Uncordon node (make schedulable)
+POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/uncordon
 Authorization: Bearer {{adminToken}}
+Content-Type: application/json
 
-### Filter by ready status - not ready nodes
-GET {{baseUrl}}/workers?isReady=false
-Authorization: Bearer {{adminToken}}
-
-### Search worker nodes by name/hostname/IP/architecture
-GET {{baseUrl}}/workers?search=worker-01
-Authorization: Bearer {{adminToken}}
-
-### Combined filters with sorting
-GET {{baseUrl}}/workers?status=ACTIVE&isSchedulable=true&isReady=true&sortBy=name&sortOrder=asc
-Authorization: Bearer {{adminToken}}
-
-### ============================================
-### WORKER NODE RETRIEVAL (ID or Name Support)
-### ============================================
-
-### Get worker node by ID (UUID format)
-GET {{baseUrl}}/workers/{{nodeId}}
-Authorization: Bearer {{adminToken}}
-
-### Get worker node by name (string format)
-GET {{baseUrl}}/workers/k3d-paas-cluster-agent-0
-Authorization: Bearer {{adminToken}}
-
-### Get worker node by name (another example)
-GET {{baseUrl}}/workers/k3d-paas-cluster-agent-1
-Authorization: Bearer {{adminToken}}
-
-### Test with actual k3d worker name
-GET {{baseUrl}}/workers/k3d-paas-cluster-agent-0
-Authorization: Bearer {{adminToken}}
-
-### ============================================
-### WORKER NODE CREATION
-### ============================================
-
-### Create new worker node - Basic
-POST {{baseUrl}}/workers
+### Drain node (evict all pods)
+POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/drain
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
-  "name": "worker-01",
-  "hostname": "worker-01.cluster.local",
-  "ipAddress": "192.168.1.101",
-  "cpuCores": 8,
-  "cpuArchitecture": "x86_64",
-  "totalMemory": 16384,
-  "totalStorage": 500000,
-  "architecture": "amd64",
-  "operatingSystem": "Ubuntu 22.04.3 LTS",
-  "kubeletVersion": "v1.28.2",
-  "containerRuntime": "containerd://1.7.2",
-  "kernelVersion": "5.15.0-78-generic",
-  "osImage": "Ubuntu 22.04.3 LTS"
+  "gracePeriodSeconds": 30,
+  "timeout": 300,
+  "force": false,
+  "deleteLocalData": false
 }
 
-### Create new worker node - Comprehensive
-POST {{baseUrl}}/workers
+### Drain node with force (for testing)
+POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/drain
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
-  "name": "worker-02",
-  "hostname": "worker-02.cluster.local",
-  "ipAddress": "192.168.1.102",
-  "cpuCores": 12,
-  "cpuArchitecture": "x86_64",
-  "totalMemory": 32768,
-  "totalStorage": 1000000,
-  "architecture": "amd64",
-  "operatingSystem": "Ubuntu 22.04.3 LTS",
-  "status": "ACTIVE",
-  "isReady": true,
-  "isSchedulable": true,
-  "maxPods": 110,
-  "currentPods": 0,
-  "allocatedCPU": 0,
-  "allocatedMemory": 0,
-  "allocatedStorage": 0,
-  "labels": {
-    "node-role.kubernetes.io/worker": "",
-    "kubernetes.io/arch": "amd64",
-    "kubernetes.io/os": "linux",
-    "node.kubernetes.io/instance-type": "standard"
-  },
-  "taints": [],
-  "kubeletVersion": "v1.28.2",
-  "containerRuntime": "containerd://1.7.2",
-  "kernelVersion": "5.15.0-78-generic",
-  "osImage": "Ubuntu 22.04.3 LTS"
+  "gracePeriodSeconds": 10,
+  "timeout": 120,
+  "force": true,
+  "deleteLocalData": true
 }
 
-### Create worker node with taints
-POST {{baseUrl}}/workers
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
+### =============================================================================
+### TESTING SCENARIOS
+### =============================================================================
 
-{
-  "name": "worker-03",
-  "hostname": "worker-03.cluster.local",
-  "ipAddress": "192.168.1.103",
-  "cpuCores": 16,
-  "cpuArchitecture": "x86_64",
-  "totalMemory": 65536,
-  "totalStorage": 2000000,
-  "architecture": "amd64",
-  "operatingSystem": "Ubuntu 22.04.3 LTS",
-  "status": "MAINTENANCE",
-  "isReady": false,
-  "isSchedulable": false,
-  "maxPods": 110,
-  "labels": {
-    "node-role.kubernetes.io/worker": "",
-    "kubernetes.io/arch": "amd64",
-    "kubernetes.io/os": "linux",
-    "node.kubernetes.io/instance-type": "high-memory"
-  },
-  "taints": [
-    {
-      "key": "node.kubernetes.io/maintenance",
-      "value": "true",
-      "effect": "NoSchedule"
-    }
-  ],
-  "kubeletVersion": "v1.28.2",
-  "containerRuntime": "containerd://1.7.2",
-  "kernelVersion": "5.15.0-78-generic",
-  "osImage": "Ubuntu 22.04.3 LTS"
-}
-
-### ============================================
-### WORKER NODE UPDATES
-### ============================================
-
-### Update worker node - Basic info
-PUT {{baseUrl}}/workers/{{nodeId}}
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "hostname": "worker-01-updated.cluster.local",
-  "ipAddress": "192.168.1.111",
-  "totalMemory": 32768,
-  "totalStorage": 750000
-}
-
-### Update worker node - Comprehensive
-PUT {{baseUrl}}/workers/{{nodeId}}
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "hostname": "worker-01-prod.cluster.local",
-  "ipAddress": "10.0.1.101",
-  "cpuCores": 16,
-  "totalMemory": 65536,
-  "totalStorage": 1000000,
-  "maxPods": 150,
-  "labels": {
-    "node-role.kubernetes.io/worker": "",
-    "kubernetes.io/arch": "amd64",
-    "kubernetes.io/os": "linux",
-    "node.kubernetes.io/instance-type": "high-performance",
-    "environment": "production"
-  },
-  "kubeletVersion": "v1.28.3",
-  "containerRuntime": "containerd://1.7.3"
-}
-
-### ============================================
-### WORKER NODE STATUS MANAGEMENT
-### ============================================
-
-### Update worker node status to ACTIVE
-PATCH {{baseUrl}}/workers/{{nodeId}}/status
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "status": "ACTIVE"
-}
-
-### Update worker node status to MAINTENANCE
-PATCH {{baseUrl}}/workers/{{nodeId}}/status
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "status": "MAINTENANCE"
-}
-
-### Update worker node status to INACTIVE
-PATCH {{baseUrl}}/workers/{{nodeId}}/status
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "status": "INACTIVE"
-}
-
-### Update worker node status to PENDING
-PATCH {{baseUrl}}/workers/{{nodeId}}/status
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "status": "PENDING"
-}
-
-### Update worker node status to NOT_READY
-PATCH {{baseUrl}}/workers/{{nodeId}}/status
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "status": "NOT_READY"
-}
-
-### Toggle worker node schedulable status
-PATCH {{baseUrl}}/workers/{{nodeId}}/schedulable
+### Test 1: Full cluster sync and stats
+POST {{baseUrl}}/workers/sync
 Authorization: Bearer {{adminToken}}
 
-### ============================================
-### SYSTEM ENDPOINTS (Kubernetes Integration)
-### ============================================
-
-### Update worker node heartbeat
-PATCH {{baseUrl}}/workers/{{nodeId}}/heartbeat
+###
+GET {{baseUrl}}/workers/stats
 Authorization: Bearer {{adminToken}}
 
-### Update worker node resource allocation
-PATCH {{baseUrl}}/workers/{{nodeId}}/resources
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "allocatedCPU": 4.5,
-  "allocatedMemory": 8192,
-  "allocatedStorage": 50000,
-  "currentPods": 15
-}
-
-### Update worker node resource allocation - High usage
-PATCH {{baseUrl}}/workers/{{nodeId}}/resources
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "allocatedCPU": 12.8,
-  "allocatedMemory": 28672,
-  "allocatedStorage": 450000,
-  "currentPods": 85
-}
-
-### ============================================
-### WORKER NODE DELETION
-### ============================================
-
-### Delete worker node
-DELETE {{baseUrl}}/workers/k3d-paas-dev-agent-0
+### Test 2: Node management workflow
+# 1. Get all nodes
+GET {{baseUrl}}/workers
 Authorization: Bearer {{adminToken}}
 
-### ============================================
+###
+# 2. Get specific node details
+GET {{baseUrl}}/workers/i6700
+Authorization: Bearer {{adminToken}}
+
+###
+# 3. Cordon the node
+POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/cordon
+Authorization: Bearer {{adminToken}}
+
+###
+# 4. Check online/offline status
+GET {{baseUrl}}/workers/online
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{baseUrl}}/workers/offline
+Authorization: Bearer {{adminToken}}
+
+###
+# 5. Uncordon the node
+POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/uncordon
+Authorization: Bearer {{adminToken}}
+
+### Test 3: Search and filter functionality
+GET {{baseUrl}}/workers?search=agent&isSchedulable=true
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{baseUrl}}/workers?status=ACTIVE&sortBy=name&sortOrder=desc
+Authorization: Bearer {{adminToken}}
+
+### Test 4: Real-time data validation
+# Get live cluster data
+GET {{baseUrl}}/workers
+Authorization: Bearer {{adminToken}}
+
+###
+# Sync cluster state
+POST {{baseUrl}}/workers/sync
+Authorization: Bearer {{adminToken}}
+
+###
+# Verify data is updated
+GET {{baseUrl}}/workers/stats
+Authorization: Bearer {{adminToken}}
+
+### =============================================================================
 ### ERROR TESTING
-### ============================================
+### =============================================================================
 
-### Test validation errors - Invalid worker node creation
-POST {{baseUrl}}/workers
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "name": "",
-  "cpuCores": -1,
-  "totalMemory": "invalid",
-  "status": "INVALID_STATUS"
-}
-
-### Test not found - Get non-existent worker node
-GET {{baseUrl}}/workers/non-existent-id
+### Test non-existent node
+GET {{baseUrl}}/workers/non-existent-node
 Authorization: Bearer {{adminToken}}
 
-### Test duplicate name - Create worker with existing name
-POST {{baseUrl}}/workers
+### Test cordon non-existent node
+POST {{baseUrl}}/workers/non-existent-node/cordon
 Authorization: Bearer {{adminToken}}
-Content-Type: application/json
 
-{
-  "name": "worker-01",
-  "hostname": "duplicate.cluster.local",
-  "ipAddress": "192.168.1.200",
-  "cpuCores": 4,
-  "cpuArchitecture": "x86_64",
-  "totalMemory": 8192,
-  "totalStorage": 250000,
-  "architecture": "amd64",
-  "operatingSystem": "Ubuntu 22.04.3 LTS"
-}
-
-### Test unauthorized access - No token
+### Test without authentication
 GET {{baseUrl}}/workers
 
-### Test invalid status update
-PATCH {{baseUrl}}/workers/{{nodeId}}/status
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
+### Test with invalid token
+GET {{baseUrl}}/workers
+Authorization: Bearer invalid-token
 
-{
-  "status": "INVALID_STATUS"
-}
-
-### Test invalid resource update
-PATCH {{baseUrl}}/workers/{{nodeId}}/resources
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "allocatedCPU": -1,
-  "allocatedMemory": "invalid",
-  "currentPods": -5
-}
-
-### ============================================
+### =============================================================================
 ### PERFORMANCE TESTING
-### ============================================
+### =============================================================================
 
-### Large pagination test
-GET {{baseUrl}}/workers?page=1&limit=100
+### Large page size test
+GET {{baseUrl}}/workers?limit=100
 Authorization: Bearer {{adminToken}}
 
-### Complex filtering test
-GET {{baseUrl}}/workers?status=ACTIVE&isSchedulable=true&isReady=true&search=worker&sortBy=totalMemory&sortOrder=desc&page=1&limit=20
+### Complex filter test
+GET {{baseUrl}}/workers?status=ACTIVE&isReady=true&isSchedulable=true&search=k3d&sortBy=cpuCores&sortOrder=desc
 Authorization: Bearer {{adminToken}}
+
+### =============================================================================
+### NOTES
+### =============================================================================
+
+# This API now provides:
+# 1. Real-time Kubernetes cluster data
+# 2. Automatic database synchronization
+# 3. Live node status and resource information
+# 4. Kubernetes node operations (cordon/uncordon/drain)
+# 5. No manual node creation/deletion (managed by K8s)
+# 6. Enhanced filtering and search capabilities
+# 7. Production-ready cluster management
+
+# Key differences from legacy API:
+# - All data is live from Kubernetes cluster
+# - No manual CRUD operations on nodes
+# - Kubernetes-native operations (cordon/drain)
+# - Real-time resource allocation tracking
+# - Automatic node discovery and sync

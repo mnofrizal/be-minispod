@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscription Expiring - {{serviceName}}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #ffc107;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #e67e22;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #6c757d;
+            font-size: 16px;
+        }
+        .warning-icon {
+            font-size: 48px;
+            color: #ffc107;
+            margin-bottom: 20px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .warning-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        .service-info {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #dee2e6;
+        }
+        .service-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 10px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .info-value {
+            color: #6c757d;
+        }
+        .expiry-date {
+            color: #dc3545;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .countdown {
+            background-color: #f8d7da;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            border: 1px solid #dc3545;
+        }
+        .countdown-text {
+            font-size: 18px;
+            font-weight: bold;
+            color: #721c24;
+        }
+        .renewal-info {
+            background-color: #d1ecf1;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #17a2b8;
+        }
+        .renewal-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0c5460;
+            margin-bottom: 15px;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #28a745;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        .button:hover {
+            background-color: #218838;
+            color: #ffffff;
+        }
+        .button-primary {
+            background-color: #007bff;
+        }
+        .button-primary:hover {
+            background-color: #0056b3;
+        }
+        .button-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .button-warning:hover {
+            background-color: #e0a800;
+        }
+        .consequences {
+            background-color: #f8d7da;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #dc3545;
+        }
+        .consequences-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #721c24;
+            margin-bottom: 10px;
+        }
+        .consequence-item {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+            color: #721c24;
+        }
+        .consequence-item::before {
+            content: "⚠️";
+            position: absolute;
+            left: 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .support-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="warning-icon">⏰</div>
+            <div class="logo">🚀 PaaS Platform</div>
+            <div class="title">Subscription Expiring Soon</div>
+            <div class="subtitle">Action required to continue your service</div>
+        </div>
+
+        <div class="content">
+            <p>Hello <strong>{{userName}}</strong>,</p>
+            
+            <div class="warning-box">
+                <div class="warning-title">⚠️ Important Notice</div>
+                <p>Your {{serviceName}} subscription is expiring soon. To avoid service interruption, please renew your subscription before the expiry date.</p>
+            </div>
+
+            <div class="service-info">
+                <div class="service-name">{{serviceName}} {{serviceVariant}}</div>
+                <div class="info-row">
+                    <span class="info-label">Subscription ID:</span>
+                    <span class="info-value">{{subscriptionId}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Current Status:</span>
+                    <span class="info-value">{{subscriptionStatus}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Expiry Date:</span>
+                    <span class="expiry-date">{{expiryDate}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Service URL:</span>
+                    <span class="info-value">{{externalUrl}}</span>
+                </div>
+            </div>
+
+            <div class="countdown">
+                <div class="countdown-text">⏳ {{daysRemaining}} days remaining</div>
+            </div>
+
+            <div class="renewal-info">
+                <div class="renewal-title">💳 Renew Your Subscription</div>
+                <p>Continue enjoying your {{serviceName}} service without interruption:</p>
+                <ul>
+                    <li>Monthly subscription: <strong>{{monthlyPrice}}</strong></li>
+                    <li>Instant renewal - no downtime</li>
+                    <li>All your data and configurations preserved</li>
+                    <li>Same service URL and access credentials</li>
+                </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{renewalUrl}}" class="button button-primary">Renew Subscription</a>
+                <a href="{{dashboardUrl}}" class="button button-warning">View Dashboard</a>
+            </div>
+
+            <div class="consequences">
+                <div class="consequences-title">What happens if you don't renew?</div>
+                <div class="consequence-item">Your service will be stopped immediately after expiry</div>
+                <div class="consequence-item">Service URL will become inaccessible</div>
+                <div class="consequence-item">30-day grace period for data recovery</div>
+                <div class="consequence-item">After 30 days, all data will be permanently deleted</div>
+            </div>
+
+            <p>We value your business and want to ensure uninterrupted service. If you have any questions about renewal or need assistance, please don't hesitate to contact our support team.</p>
+
+            <div class="support-info">
+                <p><strong>Need help with renewal?</strong> Our support team is ready to assist you.</p>
+                <p>📧 Email: support@paas-platform.com | 💬 Chat: Available 24/7</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Thank you for choosing our PaaS Platform!</p>
+            <p>This email was sent to {{userEmail}} regarding subscription {{subscriptionId}}</p>
+            <p>&copy; 2024 PaaS Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

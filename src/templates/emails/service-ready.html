@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Ready - {{serviceName}}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #28a745;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #28a745;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #6c757d;
+            font-size: 16px;
+        }
+        .success-icon {
+            font-size: 48px;
+            color: #28a745;
+            margin-bottom: 20px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .service-info {
+            background-color: #d4edda;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #28a745;
+        }
+        .service-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #155724;
+            margin-bottom: 10px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .info-value {
+            color: #6c757d;
+        }
+        .access-info {
+            background-color: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #007bff;
+        }
+        .access-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 15px;
+        }
+        .url-box {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+        .url-label {
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        .url-link {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .url-link:hover {
+            text-decoration: underline;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #28a745;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        .button:hover {
+            background-color: #218838;
+            color: #ffffff;
+        }
+        .button-secondary {
+            background-color: #007bff;
+        }
+        .button-secondary:hover {
+            background-color: #0056b3;
+        }
+        .quick-start {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .quick-start-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .step {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+        }
+        .step::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #28a745;
+            font-weight: bold;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .support-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-icon">🎉</div>
+            <div class="logo">🚀 PaaS Platform</div>
+            <div class="title">Your Service is Ready!</div>
+            <div class="subtitle">{{serviceName}} is now running and accessible</div>
+        </div>
+
+        <div class="content">
+            <p>Hello <strong>{{userName}}</strong>,</p>
+            
+            <p>Excellent news! Your {{serviceName}} service has been successfully deployed and is now ready to use.</p>
+
+            <div class="service-info">
+                <div class="service-name">{{serviceName}} {{serviceVariant}}</div>
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="status-badge">RUNNING</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Deployment Time:</span>
+                    <span class="info-value">{{deploymentTime}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Pod Name:</span>
+                    <span class="info-value">{{podName}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Namespace:</span>
+                    <span class="info-value">{{namespace}}</span>
+                </div>
+            </div>
+
+            <div class="access-info">
+                <div class="access-title">🌐 Access Your Service</div>
+                <div class="url-label">Service URL:</div>
+                <div class="url-box">
+                    <a href="{{externalUrl}}" class="url-link" target="_blank">{{externalUrl}}</a>
+                </div>
+                <p><strong>Your service is now live and accessible!</strong></p>
+            </div>
+
+            <div class="quick-start">
+                <div class="quick-start-title">🚀 Quick Start Guide</div>
+                <div class="step">Click the service URL above to access your {{serviceName}} instance</div>
+                <div class="step">Use the credentials provided in your subscription email to log in</div>
+                <div class="step">Start configuring your {{serviceName}} service according to your needs</div>
+                <div class="step">Monitor your service status through our dashboard</div>
+                <div class="step">Contact support if you need any assistance</div>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{externalUrl}}" class="button">Access Service</a>
+                <a href="{{dashboardUrl}}" class="button button-secondary">View Dashboard</a>
+            </div>
+
+            <div class="support-info">
+                <p><strong>Need help getting started?</strong> Our support team is here to assist you.</p>
+                <p>📧 Email: support@paas-platform.com | 💬 Chat: Available 24/7</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Thank you for choosing our PaaS Platform!</p>
+            <p>This email was sent to {{userEmail}} regarding subscription {{subscriptionId}}</p>
+            <p>&copy; 2024 PaaS Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

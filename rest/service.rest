@@ -1,13 +1,14 @@
 ### Variables
 @baseUrl = http://localhost:3000/api/v1
 @contentType = application/json
-@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRkZTM2NGUwMDAxMTFqNTlvZWZ5cHE3IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzMjA4MjY2LCJleHAiOjE3NTMyOTQ2NjYsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.kf49QazbsU_GQQoFF0mJNMoTQdh7bFuF_7ZnyRPPG1g
+@adminToken = {{login_response.response.body.data.tokens.accessToken}}
 
 ### ========================================
 ### ADMIN LOGIN (Get Token First)
 ### ========================================
 
 ### Login Admin User (to get admin token)
+# @name login_response
 POST {{baseUrl}}/auth/login
 Content-Type: {{contentType}}
 
@@ -27,6 +28,31 @@ GET {{baseUrl}}/services
 
 ###
 
+### Get Grouped Services (Public - Frontend Friendly)
+GET {{baseUrl}}/services/grouped
+
+###
+
+### Get Grouped Services with Search (Public)
+GET {{baseUrl}}/services/grouped?search=n8n
+
+###
+
+### Get Grouped Services by Category (Public)
+GET {{baseUrl}}/services/grouped?category=automation
+
+###
+
+### Get Service Categories (Public)
+GET {{baseUrl}}/services/categories
+
+###
+
+### Get Service Variants by Name (Public)
+GET {{baseUrl}}/services/n8n/variants
+
+###
+
 ### Get Service by Name (Public)
 GET {{baseUrl}}/services/n8n
 
@@ -37,7 +63,7 @@ GET {{baseUrl}}/services/n8n
 ### ========================================
 
 ### Get All Services (Admin)
-# Replace YOUR_ADMIN_TOKEN with actual admin token from login response
+# Replace {{adminToken}} with actual admin token from login response
 GET {{baseUrl}}/services/admin
 Authorization: Bearer {{adminToken}}
 
@@ -45,33 +71,33 @@ Authorization: Bearer {{adminToken}}
 
 ### Get All Services with Pagination (Admin)
 GET {{baseUrl}}/services/admin?page=1&limit=5
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 ###
 
 ### Get Services with Filtering (Admin)
 GET {{baseUrl}}/services/admin?isActive=true&search=n8n
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 ###
 
 ### Get Service Statistics (Admin)
 GET {{baseUrl}}/services/admin/stats
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 ###
 
 ### Get Service by ID (Admin)
 # Replace SERVICE_ID with actual service ID
 GET {{baseUrl}}/services/admin/SERVICE_ID
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 ###
 
 ### Create New Service (Admin)
 POST {{baseUrl}}/services
 Content-Type: {{contentType}}
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 {
   "name": "ghost",
@@ -83,7 +109,7 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
   "cpuLimit": "1",
   "memRequest": "512Mi",
   "memLimit": "1Gi",
-  "monthlyPrice": 0,
+  "monthlyPrice": 45000,
   "dockerImage": "ghost:latest",
   "containerPort": 2368,
   "environmentVars": {
@@ -94,24 +120,174 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
 
 ###
 
-### Create WordPress Service (Admin)
+### Create N8N Basic Variant (Admin)
 POST {{baseUrl}}/services
 Content-Type: {{contentType}}
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 {
-  "name": "wordpress",
-  "displayName": "WordPress",
-  "description": "Popular content management system for creating websites and blogs with thousands of themes and plugins.",
+  "name": "n8n",
+  "variant": "basic",
+  "variantDisplayName": "Basic",
+  "displayName": "N8N Workflow Automation - Basic",
+  "description": "Workflow automation tool for connecting apps and services - Basic plan with essential features.",
   "version": "latest",
   "isActive": true,
-  "cpuRequest": "0.5",
+  "cpuRequest": "0.25",
   "cpuLimit": "1",
   "memRequest": "512Mi",
   "memLimit": "1Gi",
+  "monthlyPrice": 25000,
+  "dockerImage": "n8nio/n8n:latest",
+  "containerPort": 5678,
+  "category": "automation",
+  "tags": ["workflow", "automation", "integration"],
+  "icon": "n8n-icon.svg",
+  "features": ["Basic workflows", "5 active workflows", "Community support"],
+  "sortOrder": 1,
+  "isDefaultVariant": true,
+  "environmentVars": {
+    "N8N_BASIC_AUTH_ACTIVE": "true",
+    "N8N_BASIC_AUTH_USER": "admin",
+    "N8N_BASIC_AUTH_PASSWORD": "password"
+  }
+}
+
+###
+
+### Create N8N Plus Variant (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "n8n",
+  "variant": "plus",
+  "variantDisplayName": "Plus",
+  "displayName": "N8N Workflow Automation - Plus",
+  "description": "Workflow automation tool for connecting apps and services - Plus plan with advanced features.",
+  "version": "latest",
+  "isActive": true,
+  "cpuRequest": "0.5",
+  "cpuLimit": "1.5",
+  "memRequest": "768Mi",
+  "memLimit": "1.5Gi",
+  "monthlyPrice": 45000,
+  "dockerImage": "n8nio/n8n:latest",
+  "containerPort": 5678,
+  "category": "automation",
+  "tags": ["workflow", "automation", "integration", "advanced"],
+  "icon": "n8n-icon.svg",
+  "features": ["Advanced workflows", "25 active workflows", "Email support", "Custom nodes"],
+  "sortOrder": 2,
+  "isDefaultVariant": false,
+  "environmentVars": {
+    "N8N_BASIC_AUTH_ACTIVE": "true",
+    "N8N_BASIC_AUTH_USER": "admin",
+    "N8N_BASIC_AUTH_PASSWORD": "password",
+    "N8N_ENCRYPTION_KEY": "encryption_key_here"
+  }
+}
+
+###
+
+### Create N8N Pro Variant (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "n8n",
+  "variant": "pro",
+  "variantDisplayName": "Pro",
+  "displayName": "N8N Workflow Automation - Pro",
+  "description": "Workflow automation tool for connecting apps and services - Pro plan with enterprise features.",
+  "version": "latest",
+  "isActive": true,
+  "cpuRequest": "1",
+  "cpuLimit": "2",
+  "memRequest": "1Gi",
+  "memLimit": "2Gi",
+  "monthlyPrice": 75000,
+  "dockerImage": "n8nio/n8n:latest",
+  "containerPort": 5678,
+  "category": "automation",
+  "tags": ["workflow", "automation", "integration", "enterprise"],
+  "icon": "n8n-icon.svg",
+  "features": ["Unlimited workflows", "Priority support", "Custom integrations", "Advanced security"],
+  "sortOrder": 3,
+  "isDefaultVariant": false,
+  "environmentVars": {
+    "N8N_BASIC_AUTH_ACTIVE": "true",
+    "N8N_BASIC_AUTH_USER": "admin",
+    "N8N_BASIC_AUTH_PASSWORD": "password",
+    "N8N_ENCRYPTION_KEY": "encryption_key_here",
+    "N8N_SECURE_COOKIE": "true"
+  }
+}
+
+###
+
+### Create Ghost Basic Variant (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "ghost",
+  "variant": "basic",
+  "variantDisplayName": "Basic",
+  "displayName": "Ghost CMS - Basic",
+  "description": "Modern publishing platform for creating blogs and websites - Basic plan.",
+  "version": "latest",
+  "isActive": true,
+  "cpuRequest": "0.25",
+  "cpuLimit": "1",
+  "memRequest": "512Mi",
+  "memLimit": "1Gi",
+  "monthlyPrice": 35000,
+  "dockerImage": "ghost:latest",
+  "containerPort": 2368,
+  "category": "cms",
+  "tags": ["blog", "cms", "publishing"],
+  "icon": "ghost-icon.svg",
+  "features": ["Basic themes", "1 custom domain", "Email support"],
+  "sortOrder": 1,
+  "isDefaultVariant": true,
+  "environmentVars": {
+    "NODE_ENV": "production",
+    "url": "http://localhost:2368"
+  }
+}
+
+###
+
+### Create WordPress Free Variant (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "wordpress",
+  "variant": "free",
+  "variantDisplayName": "Free",
+  "displayName": "WordPress - Free",
+  "description": "Popular content management system for creating websites and blogs - Free plan.",
+  "version": "latest",
+  "isActive": true,
+  "cpuRequest": "0.25",
+  "cpuLimit": "0.5",
+  "memRequest": "256Mi",
+  "memLimit": "512Mi",
   "monthlyPrice": 0,
   "dockerImage": "wordpress:latest",
   "containerPort": 80,
+  "category": "cms",
+  "tags": ["blog", "cms", "website", "free"],
+  "icon": "wordpress-icon.svg",
+  "features": ["Basic themes", "Community support", "5GB storage"],
+  "sortOrder": 1,
+  "isDefaultVariant": true,
   "environmentVars": {
     "WORDPRESS_DB_HOST": "mysql:3306",
     "WORDPRESS_DB_NAME": "wordpress"
@@ -124,7 +300,7 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
 # Replace SERVICE_ID with actual service ID
 PUT {{baseUrl}}/services/SERVICE_ID
 Content-Type: {{contentType}}
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 {
   "displayName": "Updated Service Name",
@@ -139,14 +315,14 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
 ### Toggle Service Status (Admin)
 # Replace SERVICE_ID with actual service ID
 PATCH {{baseUrl}}/services/SERVICE_ID/toggle-status
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 ###
 
 ### Delete Service (Admin)
 # Replace SERVICE_ID with actual service ID
 DELETE {{baseUrl}}/services/SERVICE_ID
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 ###
 
@@ -157,7 +333,7 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
 ### Test Create Service with Invalid Data (Admin)
 POST {{baseUrl}}/services
 Content-Type: {{contentType}}
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 {
   "name": "",
@@ -172,7 +348,7 @@ Authorization: Bearer YOUR_ADMIN_TOKEN
 ### Test Create Service with Existing Name (Admin)
 POST {{baseUrl}}/services
 Content-Type: {{contentType}}
-Authorization: Bearer YOUR_ADMIN_TOKEN
+Authorization: Bearer {{adminToken}}
 
 {
   "name": "n8n",
@@ -196,5 +372,84 @@ GET {{baseUrl}}/services/admin
 ### Test Admin Endpoints with Invalid Token
 GET {{baseUrl}}/services/admin
 Authorization: Bearer invalid_token_here
+
+###
+### ========================================
+### SERVICE VARIANTS ERROR TESTS
+### ========================================
+
+### Test Create Service Variant with Duplicate Name+Variant (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "n8n",
+  "variant": "basic",
+  "variantDisplayName": "Basic Duplicate",
+  "displayName": "N8N Workflow Automation - Basic Duplicate",
+  "description": "This should fail because n8n basic already exists",
+  "dockerImage": "n8nio/n8n:latest"
+}
+
+###
+
+### Test Create Service Variant with Invalid Variant Name (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "test-service",
+  "variant": "",
+  "variantDisplayName": "Empty Variant",
+  "displayName": "Test Service",
+  "description": "This should fail because variant is empty",
+  "dockerImage": "test:latest"
+}
+
+###
+
+### Test Get Variants for Non-existent Service
+GET {{baseUrl}}/services/non-existent-service/variants
+
+###
+
+### Test Get Grouped Services with Invalid Category
+GET {{baseUrl}}/services/grouped?category=invalid-category
+
+###
+
+### Test Create Service with Invalid Sort Order (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "test-service",
+  "variant": "test",
+  "variantDisplayName": "Test",
+  "displayName": "Test Service",
+  "description": "Test service with invalid sort order",
+  "dockerImage": "test:latest",
+  "sortOrder": -1
+}
+
+###
+
+### Test Create Service with Invalid Features Array (Admin)
+POST {{baseUrl}}/services
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "test-service",
+  "variant": "test",
+  "variantDisplayName": "Test",
+  "displayName": "Test Service",
+  "description": "Test service with invalid features",
+  "dockerImage": "test:latest",
+  "features": "not-an-array"
+}
 
 ###

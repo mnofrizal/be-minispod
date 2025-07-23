@@ -33,28 +33,43 @@ model User {
     @@map("users")
 }
 
-// Service catalog - available services (N8N, Ghost, WordPress, etc.)
+// Service catalog - available services with variants/plans (N8N Basic/Plus/Pro, etc.)
 model ServiceCatalog {
     id          String  @id @default(cuid())
-    name        String  @unique // e.g., "n8n", "ghost", "wordpress"
-    displayName String // e.g., "N8N Workflow Automation"
+    name        String // Base service name: "n8n", "ghost", "wordpress"
+    displayName String // Service display name: "N8N Workflow Automation"
     description String
     version     String  @default("latest")
     isActive    Boolean @default(true)
 
-    // Resource specifications
+    // NEW: Variant/Plan fields
+    variant            String // "basic", "plus", "pro", "standard"
+    variantDisplayName String // "Basic Plan", "Plus Plan", "Pro Plan"
+    sortOrder          Int     @default(1) // For ordering variants
+    isDefaultVariant   Boolean @default(false) // Mark default plan
+
+    // Resource specifications (per variant)
     cpuRequest String @default("0.25") // 0.25 vCPU
     cpuLimit   String @default("1") // 1 vCPU
     memRequest String @default("512Mi") // 512MB
     memLimit   String @default("1Gi") // 1GB
 
-    // Pricing (for future use)
-    monthlyPrice Decimal @default(0) // Free for now
+    // Pricing (per variant)
+    monthlyPrice Decimal @default(0) // Can be different per variant
+
+    // Quota management
+    availableQuota Int @default(-1) // -1 = unlimited, 0+ = limited quota
 
     // Template configuration
     dockerImage     String
     containerPort   Int    @default(80)
     environmentVars Json? // Environment variables as JSON
+
+    // NEW: Service metadata
+    category String? // "automation", "cms", "database", "analytics"
+    tags     String[] // ["workflow", "automation", "integration"]
+    icon     String? // Icon URL or identifier
+    features String[] // ["1 vCPU", "1GB RAM", "Basic Support"]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -62,6 +77,8 @@ model ServiceCatalog {
     // Relations
     subscriptions Subscription[]
 
+    // NEW: Composite unique constraint for name + variant
+    @@unique([name, variant])
     @@map("service_catalog")
 }
 
@@ -111,6 +128,10 @@ model ServiceInstance {
     // Resource allocation
     cpuAllocated String @default("1") // 1 vCPU
     memAllocated String @default("1Gi") // 1GB
+
+    // Health monitoring fields
+    lastHealthCheck DateTime?
+    lastStatusSync  DateTime?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -433,6 +454,7 @@ enum BalanceTransactionType {
 }
 
 enum SubscriptionStatus {
+    PENDING_DEPLOYMENT
     ACTIVE
     EXPIRED
     CANCELLED

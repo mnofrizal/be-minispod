@@ -4,6 +4,9 @@ import {
   invoiceService,
   transactionService,
 } from "./billing.service.js";
+import { podService } from "./pod.service.js";
+import { templateParser } from "../templates/template.parser.js";
+import { notificationJobs } from "../jobs/notification.jobs.js";
 import logger from "../utils/logger.util.js";
 
 /**
@@ -15,55 +18,70 @@ export const subscriptionService = {
    */
   async createSubscription(userId, serviceId) {
     try {
-      return await prisma.$transaction(async (tx) => {
-        // 1. Get service details and pricing
-        const service = await tx.serviceCatalog.findUnique({
-          where: { id: serviceId, isActive: true },
-        });
+      // 1. Get service details and pricing
+      const service = await prisma.serviceCatalog.findUnique({
+        where: { id: serviceId, isActive: true },
+      });
 
-        if (!service) {
-          throw new Error("Service not found or inactive");
-        }
+      if (!service) {
+        throw new Error("Service not found or inactive");
+      }
 
-        const monthlyPrice = parseFloat(service.monthlyPrice);
+      const monthlyPrice = parseFloat(service.monthlyPrice);
 
-        if (monthlyPrice <= 0) {
-          throw new Error("Service pricing not configured");
-        }
+      // Allow free services (monthlyPrice = 0) for testing and free tier
+      if (monthlyPrice < 0) {
+        throw new Error("Invalid service pricing");
+      }
 
-        // 2. Check user balance
+      // 2. Check available quota (-1 means unlimited, null means unlimited, <=0 means exhausted)
+      if (
+        service.availableQuota !== null &&
+        service.availableQuota !== -1 &&
+        service.availableQuota <= 0
+      ) {
+        throw new Error(
+          `Service quota exhausted. No more instances available for ${service.displayName}`
+        );
+      }
+
+      // 3. Check user balance (only if service is not free)
+      if (monthlyPrice > 0) {
         const userBalance = await balanceService.getUserBalance(userId);
         if (userBalance.balance < monthlyPrice) {
           throw new Error(
             `Insufficient balance. Current: ${userBalance.balance}, Required: ${monthlyPrice}`
           );
         }
+      }
 
-        // 3. Check if user already has active subscription for this service
-        const existingSubscription = await tx.subscription.findFirst({
-          where: {
-            userId,
-            serviceId,
-            status: "ACTIVE",
-          },
-        });
+      // 4. Check if user already has active subscription for this service
+      const existingSubscription = await prisma.subscription.findFirst({
+        where: {
+          userId,
+          serviceId,
+          status: "ACTIVE",
+        },
+      });
 
-        if (existingSubscription) {
-          throw new Error(
-            "User already has an active subscription for this service"
-          );
-        }
+      if (existingSubscription) {
+        throw new Error(
+          "User already has an active subscription for this service"
+        );
+      }
 
-        // 4. Calculate subscription dates
-        const startDate = new Date();
-        const expiresAt = new Date();
-        expiresAt.setMonth(expiresAt.getMonth() + 1); // 30 days subscription
+      // 4. Calculate subscription dates
+      const startDate = new Date();
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 1); // 30 days subscription
 
-        // 5. Generate unique subdomain
-        const subdomain = await generateUniqueSubdomain(service.name, userId);
+      // 5. Generate unique subdomain
+      const subdomain = await generateUniqueSubdomain(service.name, userId);
 
-        // 6. Create subscription record
-        const subscription = await tx.subscription.create({
+      // 6. Use transaction to create subscription and reduce quota atomically
+      const subscription = await prisma.$transaction(async (tx) => {
+        // Create subscription record
+        const newSubscription = await tx.subscription.create({
           data: {
             userId,
             serviceId,
@@ -80,34 +98,56 @@ export const subscriptionService = {
           },
         });
 
-        // 7. Deduct balance (outside transaction to use balanceService)
-        await balanceService.deductCredit(
-          userId,
-          monthlyPrice,
-          `Subscription for ${service.displayName}`,
-          subscription.id,
-          "subscription"
-        );
+        // Reduce available quota by 1 (if quota is not null and not unlimited)
+        if (service.availableQuota !== null && service.availableQuota !== -1) {
+          await tx.serviceCatalog.update({
+            where: { id: serviceId },
+            data: {
+              availableQuota: {
+                decrement: 1,
+              },
+            },
+          });
+        }
 
-        // 8. Generate invoice
-        const invoice = await invoiceService.generateInvoice(
+        return newSubscription;
+      });
+
+      // 7. Handle billing operations for ALL services (free and paid)
+      let invoice = null;
+      let unifiedTransaction = null;
+
+      try {
+        // For paid services: deduct balance
+        if (monthlyPrice > 0) {
+          await balanceService.deductCredit(
+            userId,
+            monthlyPrice,
+            `Subscription for ${service.displayName}`,
+            subscription.id,
+            "subscription"
+          );
+        }
+
+        // Generate invoice for ALL services (including free ones for tracking)
+        invoice = await invoiceService.generateInvoice(
           userId,
           "SUBSCRIPTION",
-          monthlyPrice,
+          monthlyPrice, // Will be 0 for free services
           subscription.id,
           "subscription"
         );
 
-        // 9. Create unified transaction record
-        const unifiedTransaction =
+        // Create unified transaction record for ALL services
+        unifiedTransaction =
           await transactionService.createServicePurchaseTransaction(
             userId,
             subscription.id,
-            monthlyPrice,
+            monthlyPrice, // Will be 0 for free services
             service.displayName
           );
 
-        // 10. Link invoice to unified transaction
+        // Link invoice to unified transaction
         if (invoice && unifiedTransaction) {
           await transactionService.linkInvoiceToTransaction(
             subscription.id,
@@ -115,13 +155,63 @@ export const subscriptionService = {
             invoice.id
           );
         }
+      } catch (billingError) {
+        // If billing fails, rollback the subscription
+        await prisma.subscription.delete({
+          where: { id: subscription.id },
+        });
+        throw new Error(`Billing failed: ${billingError.message}`);
+      }
 
-        logger.info(
-          `Created subscription ${subscription.id} for user ${userId}, service ${service.displayName}`
+      // 8. Create Kubernetes pod for the service
+      try {
+        // Generate service configuration from template
+        const serviceConfig = templateParser.parseTemplate(service.name, {
+          adminEmail: subscription.user.email,
+          adminPassword: generateRandomPassword(),
+          webhookUrl: `https://${subscription.subdomain}.${service.name}.${
+            process.env.K8S_CLUSTER_DOMAIN || "localhost"
+          }`,
+        });
+
+        // Create pod
+        const serviceInstance = await podService.createPod(
+          subscription.id,
+          serviceConfig
         );
 
-        return subscription;
-      });
+        logger.info(
+          `Created pod ${serviceInstance.podName} for subscription ${subscription.id}`
+        );
+      } catch (podError) {
+        logger.error(
+          `Pod creation failed for subscription ${subscription.id}:`,
+          podError
+        );
+        // Don't rollback subscription - pod creation can be retried
+        // Mark subscription as needing pod creation
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: "PENDING_DEPLOYMENT" },
+        });
+      }
+
+      // 9. Send subscription confirmation email
+      try {
+        await notificationJobs.queueSubscriptionConfirmation(subscription.id);
+      } catch (notificationError) {
+        logger.error(
+          `Failed to queue subscription confirmation email for ${subscription.id}:`,
+          notificationError
+        );
+        // Don't fail the subscription creation for email issues
+      }
+
+      logger.info(
+        `Created subscription ${subscription.id} for user ${userId}, service ${service.displayName}`
+      );
+
+      return subscription;
     } catch (error) {
       logger.error(`Error creating subscription for user ${userId}:`, error);
       throw error;
@@ -133,91 +223,96 @@ export const subscriptionService = {
    */
   async renewSubscription(subscriptionId, userId) {
     try {
-      return await prisma.$transaction(async (tx) => {
-        // 1. Get subscription details
-        const subscription = await tx.subscription.findFirst({
-          where: {
-            id: subscriptionId,
-            userId,
-            status: { in: ["ACTIVE", "EXPIRED"] },
+      // 1. Get subscription details
+      const subscription = await prisma.subscription.findFirst({
+        where: {
+          id: subscriptionId,
+          userId,
+          status: { in: ["ACTIVE", "EXPIRED"] },
+        },
+        include: {
+          service: true,
+          user: {
+            select: { id: true, name: true, email: true },
           },
-          include: {
-            service: true,
-            user: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-        });
+        },
+      });
 
-        if (!subscription) {
-          throw new Error("Subscription not found or cannot be renewed");
-        }
+      if (!subscription) {
+        throw new Error("Subscription not found or cannot be renewed");
+      }
 
-        const monthlyPrice = parseFloat(subscription.service.monthlyPrice);
+      const monthlyPrice = parseFloat(subscription.service.monthlyPrice);
 
-        // 2. Check user balance
+      // 2. Check user balance (only if service is not free)
+      if (monthlyPrice > 0) {
         const userBalance = await balanceService.getUserBalance(userId);
         if (userBalance.balance < monthlyPrice) {
           throw new Error(
             `Insufficient balance for renewal. Current: ${userBalance.balance}, Required: ${monthlyPrice}`
           );
         }
+      }
 
-        // 3. Calculate new expiry date
-        const currentExpiry = new Date(subscription.expiresAt);
-        const newExpiry = new Date(currentExpiry);
+      // 3. Calculate new expiry date
+      const currentExpiry = new Date(subscription.expiresAt);
+      const newExpiry = new Date(currentExpiry);
+      newExpiry.setMonth(newExpiry.getMonth() + 1);
+
+      // If subscription is expired, start from current date
+      if (subscription.status === "EXPIRED") {
+        const now = new Date();
+        newExpiry.setTime(now.getTime());
         newExpiry.setMonth(newExpiry.getMonth() + 1);
+      }
 
-        // If subscription is expired, start from current date
-        if (subscription.status === "EXPIRED") {
-          const now = new Date();
-          newExpiry.setTime(now.getTime());
-          newExpiry.setMonth(newExpiry.getMonth() + 1);
+      // 4. Update subscription first
+      const renewedSubscription = await prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: "ACTIVE",
+          expiresAt: newExpiry,
+        },
+        include: {
+          service: true,
+          user: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+
+      // 5. Handle billing operations for ALL renewals (free and paid)
+      try {
+        // For paid services: deduct balance
+        if (monthlyPrice > 0) {
+          await balanceService.deductCredit(
+            userId,
+            monthlyPrice,
+            `Subscription renewal for ${subscription.service.displayName}`,
+            subscriptionId,
+            "subscription"
+          );
         }
 
-        // 4. Update subscription
-        const renewedSubscription = await tx.subscription.update({
-          where: { id: subscriptionId },
-          data: {
-            status: "ACTIVE",
-            expiresAt: newExpiry,
-          },
-          include: {
-            service: true,
-            user: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-        });
-
-        // 5. Deduct balance
-        await balanceService.deductCredit(
-          userId,
-          monthlyPrice,
-          `Subscription renewal for ${subscription.service.displayName}`,
-          subscriptionId,
-          "subscription"
-        );
-
-        // 6. Generate renewal invoice
+        // Generate renewal invoice for ALL services (including free ones for tracking)
         const invoice = await invoiceService.generateInvoice(
           userId,
           "SUBSCRIPTION",
-          monthlyPrice,
+          monthlyPrice, // Will be 0 for free services
           subscriptionId,
           "subscription"
         );
 
-        // 7. Create unified transaction record for renewal
+        // Create unified transaction record for ALL renewals
         const unifiedTransaction =
           await transactionService.createServicePurchaseTransaction(
             userId,
             subscriptionId,
-            monthlyPrice,
+            monthlyPrice, // Will be 0 for free services
             `${subscription.service.displayName} (Renewal)`
           );
 
-        // 8. Link invoice to unified transaction
+        // Link invoice to unified transaction
         if (invoice && unifiedTransaction) {
           await transactionService.linkInvoiceToTransaction(
             subscriptionId,
@@ -225,13 +320,18 @@ export const subscriptionService = {
             invoice.id
           );
         }
-
-        logger.info(
-          `Renewed subscription ${subscriptionId} for user ${userId}`
+      } catch (billingError) {
+        logger.error(
+          `Billing failed for renewal ${subscriptionId}:`,
+          billingError
         );
+        // Note: We don't rollback the subscription renewal here as it's a separate concern
+        // The subscription is renewed but billing failed - this should be handled by admin
+      }
 
-        return renewedSubscription;
-      });
+      logger.info(`Renewed subscription ${subscriptionId} for user ${userId}`);
+
+      return renewedSubscription;
     } catch (error) {
       logger.error(`Error renewing subscription ${subscriptionId}:`, error);
       throw error;
@@ -258,18 +358,38 @@ export const subscriptionService = {
         throw new Error("Active subscription not found");
       }
 
-      // Update subscription status
-      const cancelledSubscription = await prisma.subscription.update({
-        where: { id: subscriptionId },
-        data: {
-          status: "CANCELLED",
-        },
-        include: {
-          service: true,
-          user: {
-            select: { id: true, name: true, email: true },
+      // Use transaction to cancel subscription and restore quota atomically
+      const cancelledSubscription = await prisma.$transaction(async (tx) => {
+        // Update subscription status
+        const updatedSubscription = await tx.subscription.update({
+          where: { id: subscriptionId },
+          data: {
+            status: "CANCELLED",
           },
-        },
+          include: {
+            service: true,
+            user: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        // Restore available quota by 1 (if quota is not null and not unlimited)
+        if (
+          subscription.service.availableQuota !== null &&
+          subscription.service.availableQuota !== -1
+        ) {
+          await tx.serviceCatalog.update({
+            where: { id: subscription.serviceId },
+            data: {
+              availableQuota: {
+                increment: 1,
+              },
+            },
+          });
+        }
+
+        return updatedSubscription;
       });
 
       logger.info(
@@ -385,18 +505,21 @@ export const subscriptionService = {
    */
   async checkSubscriptionEligibility(userId, serviceId) {
     try {
-      // Get service pricing
+      // Get service pricing and quota
       const service = await prisma.serviceCatalog.findUnique({
         where: { id: serviceId, isActive: true },
-        select: { id: true, displayName: true, monthlyPrice: true },
+        select: {
+          id: true,
+          displayName: true,
+          monthlyPrice: true,
+          availableQuota: true,
+        },
       });
 
       if (!service) {
         throw new Error("Service not found or inactive");
       }
 
-      // Get user balance
-      const userBalance = await balanceService.getUserBalance(userId);
       const monthlyPrice = parseFloat(service.monthlyPrice);
 
       // Check existing subscription
@@ -408,17 +531,64 @@ export const subscriptionService = {
         },
       });
 
+      // Get user balance for all services (needed for billing operations)
+      const userBalance = await balanceService.getUserBalance(userId);
+
+      // Check quota availability (-1 means unlimited, null means unlimited, >0 means available)
+      const quotaAvailable =
+        service.availableQuota === null ||
+        service.availableQuota === -1 ||
+        service.availableQuota > 0;
+
+      // For free services, check existing subscription and quota
+      if (monthlyPrice === 0) {
+        return {
+          eligible: !existingSubscription && quotaAvailable,
+          service: {
+            id: service.id,
+            displayName: service.displayName,
+            monthlyPrice: service.monthlyPrice,
+            availableQuota: service.availableQuota,
+          },
+          balance: {
+            current: userBalance.balance,
+            required: 0,
+            sufficient: true, // Always sufficient for free services
+          },
+          quota: {
+            available: service.availableQuota,
+            sufficient: quotaAvailable,
+          },
+          existingSubscription: !!existingSubscription,
+          reasons: [
+            ...(existingSubscription
+              ? ["Already subscribed to this service"]
+              : []),
+            ...(!quotaAvailable ? ["Service quota exhausted"] : []),
+          ],
+        };
+      }
+
+      // For paid services, check balance, existing subscription, and quota
       return {
-        eligible: userBalance.balance >= monthlyPrice && !existingSubscription,
+        eligible:
+          userBalance.balance >= monthlyPrice &&
+          !existingSubscription &&
+          quotaAvailable,
         service: {
           id: service.id,
           displayName: service.displayName,
           monthlyPrice: service.monthlyPrice,
+          availableQuota: service.availableQuota,
         },
         balance: {
           current: userBalance.balance,
           required: monthlyPrice,
           sufficient: userBalance.balance >= monthlyPrice,
+        },
+        quota: {
+          available: service.availableQuota,
+          sufficient: quotaAvailable,
         },
         existingSubscription: !!existingSubscription,
         reasons: [
@@ -428,6 +598,7 @@ export const subscriptionService = {
           ...(existingSubscription
             ? ["Already subscribed to this service"]
             : []),
+          ...(!quotaAvailable ? ["Service quota exhausted"] : []),
         ],
       };
     } catch (error) {
@@ -532,6 +703,19 @@ async function generateUniqueSubdomain(serviceName, userId) {
   }
 
   return subdomain;
+}
+
+/**
+ * Helper function to generate random password
+ */
+function generateRandomPassword(length = 16) {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 export default subscriptionService;

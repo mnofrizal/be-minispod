@@ -363,6 +363,102 @@ const getServiceStats = async (req, res) => {
   }
 };
 
+/**
+ * Get grouped services (for frontend - one card per service with variants)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getGroupedServices = async (req, res) => {
+  try {
+    const result = await serviceService.getGroupedServices(req.query);
+
+    res.json(
+      responseUtil.success(result, "Grouped services retrieved successfully")
+    );
+  } catch (error) {
+    logger.error("Error in getGroupedServices controller:", error);
+    res
+      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      .json(
+        responseUtil.error(
+          "Failed to retrieve grouped services",
+          "INTERNAL_SERVER_ERROR",
+          HTTP_STATUS.INTERNAL_SERVER_ERROR
+        )
+      );
+  }
+};
+
+/**
+ * Get service variants by base service name
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getServiceVariants = async (req, res) => {
+  try {
+    const result = await serviceService.getServiceVariants(
+      req.params.serviceName
+    );
+
+    res.json(
+      responseUtil.success(result, "Service variants retrieved successfully")
+    );
+  } catch (error) {
+    logger.error("Error in getServiceVariants controller:", error);
+
+    if (error.code === "SERVICE_NOT_FOUND") {
+      return res
+        .status(HTTP_STATUS.NOT_FOUND)
+        .json(
+          responseUtil.error(
+            error.message,
+            "SERVICE_NOT_FOUND",
+            HTTP_STATUS.NOT_FOUND
+          )
+        );
+    }
+
+    res
+      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      .json(
+        responseUtil.error(
+          "Failed to retrieve service variants",
+          "INTERNAL_SERVER_ERROR",
+          HTTP_STATUS.INTERNAL_SERVER_ERROR
+        )
+      );
+  }
+};
+
+/**
+ * Get service categories
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getServiceCategories = async (req, res) => {
+  try {
+    const categories = await serviceService.getServiceCategories();
+
+    res.json(
+      responseUtil.success(
+        categories,
+        "Service categories retrieved successfully"
+      )
+    );
+  } catch (error) {
+    logger.error("Error in getServiceCategories controller:", error);
+    res
+      .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      .json(
+        responseUtil.error(
+          "Failed to retrieve service categories",
+          "INTERNAL_SERVER_ERROR",
+          HTTP_STATUS.INTERNAL_SERVER_ERROR
+        )
+      );
+  }
+};
+
 export {
   getAllServices,
   getActiveServices,
@@ -373,4 +469,7 @@ export {
   deleteService,
   toggleServiceStatus,
   getServiceStats,
+  getGroupedServices,
+  getServiceVariants,
+  getServiceCategories,
 };

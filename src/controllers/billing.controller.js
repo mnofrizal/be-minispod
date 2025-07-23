@@ -7,6 +7,7 @@ import {
 import HTTP_STATUS from "../utils/http-status.util.js";
 import { createResponse } from "../utils/response.util.js";
 import logger from "../utils/logger.util.js";
+import { generateInvoicePDF } from "../utils/pdf.util.js";
 
 /**
  * Balance Management Controllers
@@ -421,29 +422,27 @@ export const downloadInvoicePDF = async (req, res) => {
     // Track download
     await invoiceService.trackInvoiceDownload(id, userId);
 
-    // For now, return invoice data as JSON
-    // In production, you would generate and return actual PDF
-    return res.status(HTTP_STATUS.OK).json(
-      createResponse(true, "Invoice PDF data retrieved successfully", {
-        message: "PDF generation will be implemented in next phase",
-        invoice: {
-          invoiceNumber: invoice.invoiceNumber,
-          amount: invoice.amount,
-          currency: invoice.currency,
-          description: invoice.description,
-          paidAt: invoice.paidAt,
-          user: invoice.user,
-        },
-      })
-    );
+    // Generate PDF
+    const pdfBuffer = await generateInvoicePDF(invoice);
+
+    // Set response headers for PDF download
+    const filename = `invoice-${invoice.invoiceNumber}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", pdfBuffer.length);
+
+    // Send PDF buffer
+    return res.send(pdfBuffer);
   } catch (error) {
     logger.error("Error downloading invoice PDF:", error);
+
+    // If PDF generation fails, return JSON error response
     return res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
         createResponse(
           false,
-          "Error downloading invoice PDF",
+          "Error generating invoice PDF",
           null,
           error.message
         )

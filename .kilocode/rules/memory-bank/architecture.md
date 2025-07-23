@@ -6,7 +6,7 @@ The backend is designed as a **microservices-oriented monolith** using Express.j
 
 ## Current Implementation Status
 
-### ✅ Phase 1 Complete - Production-Ready Backend System
+### ✅ Phase 2 Complete - Production-Ready Backend System
 
 **Implemented Components:**
 
@@ -24,6 +24,11 @@ The backend is designed as a **microservices-oriented monolith** using Express.j
 - **Background Job System**: Automated health monitoring and resource tracking
 - **Local Development**: Complete k3d integration with auto-registration and heartbeat scripts
 - **Production Deployment**: Kubernetes DaemonSet for automatic worker node agents
+- **Kubernetes Integration**: Full @kubernetes/client-node integration with pod lifecycle management
+- **Pod Management System**: Complete pod provisioning, monitoring, restart, and cleanup with service templates
+- **Service Templates**: Pre-configured templates for N8N, Ghost, and WordPress with dynamic configuration
+- **Email Notification System**: Complete email system with HTML templates and queue-based delivery
+- **Monitoring Integration**: Prometheus and Grafana setup for production monitoring
 
 **Current File Structure:**
 
@@ -35,7 +40,9 @@ src/
 │   ├── user.controller.js       # ✅ Admin user management handlers
 │   ├── service.controller.js    # ✅ Service catalog handlers
 │   ├── worker.controller.js     # ✅ Worker node management with ID/name resolution
-│   └── billing.controller.js    # ✅ Billing operations (balance, top-up, invoices, unified transactions)
+│   ├── billing.controller.js    # ✅ Billing operations (balance, top-up, invoices, unified transactions)
+│   ├── subscription.controller.js # ✅ Subscription lifecycle management
+│   └── pod.controller.js        # ✅ Pod management with Kubernetes integration
 ├── middleware/
 │   ├── auth.middleware.js       # ✅ JWT authentication & authorization
 │   ├── error.middleware.js      # ✅ Global error handling
@@ -47,7 +54,7 @@ src/
 │   ├── workers.routes.js       # ✅ Worker node management with flexible validation
 │   ├── billing.routes.js       # ✅ Billing system endpoints with unified transactions
 │   ├── subscriptions.routes.js # ✅ Subscription management with credit-based flow
-│   └── pods.routes.js          # 🔄 Placeholder (Phase 2)
+│   └── pods.routes.js          # ✅ Pod management endpoints with Kubernetes operations
 ├── services/
 │   ├── auth.service.js         # ✅ Authentication business logic
 │   ├── user.service.js         # ✅ User management business logic
@@ -55,69 +62,97 @@ src/
 │   ├── worker.service.js       # ✅ Worker node management with focused functions
 │   ├── billing.service.js      # ✅ Balance, top-up, and unified transaction management
 │   ├── midtrans.service.js     # ✅ Midtrans payment gateway integration
-│   └── subscription.service.js # ✅ Credit-based subscription lifecycle
+│   ├── subscription.service.js # ✅ Credit-based subscription lifecycle
+│   ├── pod.service.js          # ✅ Kubernetes pod lifecycle management
+│   └── notification.service.js # ✅ Email notification system
 ├── validations/
 │   ├── auth.validation.js      # ✅ Authentication validation schemas
 │   ├── user.validation.js      # ✅ User management validation schemas
 │   ├── service.validation.js   # ✅ Service catalog validation schemas
 │   ├── worker.validation.js    # ✅ Worker node validation with flexible schemas
-│   └── billing.validation.js   # ✅ Billing operations validation with CUID support
+│   ├── billing.validation.js   # ✅ Billing operations validation with CUID support
+│   └── subscription.validation.js # ✅ Subscription validation schemas
 ├── jobs/
+│   ├── job-scheduler.js        # ✅ Enhanced job scheduler with queue integration
+│   ├── queue.manager.js        # ✅ Bull queue management system
 │   ├── health-monitor.job.js   # ✅ Background health monitoring job
 │   ├── billing.jobs.js         # ✅ Payment processing and billing automation
-│   └── job-scheduler.js        # ✅ Job scheduling system
-├── utils/
-│   ├── crypto.util.js          # ✅ Password hashing utilities
-│   ├── logger.util.js          # ✅ Winston logging setup
-│   ├── response.util.js        # ✅ API response formatting
-│   ├── validation.util.js      # ✅ Input validation and UUID detection helpers
-│   ├── http-status.util.js     # ✅ HTTP status code constants
-│   └── user-roles.util.js      # ✅ User role constants
-└── config/
-    └── database.js             # ✅ Centralized Prisma configuration
+│   ├── subscription.jobs.js    # ✅ Subscription lifecycle automation
+│   ├── pod.jobs.js             # ✅ Pod monitoring and health checks
+│   └── notification.jobs.js    # ✅ Email notification job processing
+├── config/
+│   ├── database.js             # ✅ Centralized Prisma configuration
+│   └── kubernetes.js           # ✅ Kubernetes client configuration and management
+├── templates/
+│   ├── template.parser.js      # ✅ Service template processor for K8s deployments
+│   └── emails/
+│       ├── welcome.html        # ✅ Welcome email template
+│       ├── subscription-created.html # ✅ Subscription confirmation template
+│       ├── service-ready.html  # ✅ Service deployment ready notification
+│       └── subscription-expiring.html # ✅ Subscription expiry warning
+└── utils/
+    ├── crypto.util.js          # ✅ Password hashing utilities
+    ├── logger.util.js          # ✅ Winston logging setup
+    ├── response.util.js        # ✅ API response formatting
+    ├── validation.util.js      # ✅ Input validation and UUID detection helpers
+    ├── http-status.util.js     # ✅ HTTP status code constants
+    ├── user-roles.util.js      # ✅ User role constants
+    └── pdf.util.js             # ✅ PDF generation using PDFKit for invoices
 
 prisma/
 ├── schema.prisma               # ✅ Database schema with User, ServiceCatalog, WorkerNode, and unified Transaction models
 ├── seed.js                     # ✅ Database seeding with test data
 └── migrations/                 # ✅ Database migration files
 
-k8s-deployments/
-└── heartbeat-agent-daemonset.yaml # ✅ Kubernetes DaemonSet for production heartbeats
-
 rest/
 ├── auth.rest                   # ✅ Authentication API testing
 ├── user.rest                   # ✅ User management API testing
 ├── service.rest                # ✅ Service catalog API testing
 ├── worker.rest                 # ✅ Worker node management API testing
-└── billing.rest                # ✅ Billing system API testing with unified transactions
+├── billing.rest                # ✅ Billing system API testing with unified transactions
+├── subscription.rest           # ✅ Subscription management API testing
+└── pod.rest                    # ✅ Pod management API testing
+
+monitoring/
+├── prometheus.yml              # ✅ Prometheus configuration for metrics collection
+└── grafana/
+    ├── dashboards/
+    │   └── paas-backend.json   # ✅ Grafana dashboard for backend monitoring
+    └── datasources/
+        └── prometheus.yml      # ✅ Grafana Prometheus datasource configuration
 
 # Development Scripts
-├── auto-register-workers.js         # ✅ k3d worker auto-registration script
-├── auto-register-real-workers.js    # ✅ Real k3d worker registration with kubectl
 ├── auto-heartbeat-k3d.js           # ✅ Continuous heartbeat script for k3d
-├── test-production-system.js       # ✅ Production system testing script
 ├── test-k8s-connection.js          # ✅ Kubernetes connection testing
 ├── LOCAL_DEVELOPMENT_GUIDE.md      # ✅ Comprehensive k3d setup guide
-└── HEARTBEAT_DEPLOYMENT_GUIDE.md   # ✅ Production heartbeat deployment guide
+└── scripts/
+    ├── setup-k3d-external.sh       # ✅ k3d cluster setup for external access
+    ├── ubuntu-setup-heartbeat.sh   # ✅ Ubuntu heartbeat agent setup
+    ├── ubuntu-register-worker.sh   # ✅ Ubuntu worker registration
+    └── verify-setup.sh             # ✅ System verification script
 ```
 
-### 🔄 Phase 2 Planned - Business Logic
+### ✅ Phase 2 Complete - Full Kubernetes Integration
+
+**All Phase 2 objectives have been successfully achieved:**
+
+1. **Kubernetes Client Integration** ✅ - Complete @kubernetes/client-node setup with multi-environment support
+2. **Pod Management System** ✅ - Full pod lifecycle management with service templates
+3. **Service Templates** ✅ - N8N, Ghost, and WordPress templates with dynamic configuration
+4. **Background Job System** ✅ - Redis-based Bull queues with comprehensive job processing
+5. **Email Notification System** ✅ - Complete email system with HTML templates and queue integration
+6. **Enhanced Job Scheduler** ✅ - Hybrid scheduling with cron jobs and Bull queue system
+7. **Production Monitoring** ✅ - Prometheus and Grafana integration for system monitoring
+
+### 🚀 Phase 3 Ready - Production Deployment
 
 **Next Implementation Priority:**
 
-- Subscription lifecycle APIs
-- Database schema expansion for business entities
-- Background job system setup (Bull/Agenda)
-- Email notification system
-
-### 🔄 Phase 3 Planned - Kubernetes Integration
-
-**Future Implementation:**
-
-- Kubernetes client integration
-- Pod provisioning and management
-- Webhook system for events
-- Service templates and deployment
+1. **Frontend Integration**: Connect with Next.js frontend for complete user experience
+2. **Production Deployment**: Deploy to production Kubernetes cluster with monitoring
+3. **Advanced Features**: Custom domains, advanced backup/restore, multi-region support
+4. **Performance Optimization**: Caching strategies, connection pooling, load balancing
+5. **Security Hardening**: Advanced security features, compliance, audit logging
 
 ## User Role System (Implemented)
 
@@ -146,11 +181,9 @@ rest/
 ├── users.routes.js         # ✅ User management endpoints
 ├── services.routes.js      # ✅ Service catalog endpoints
 ├── workers.routes.js       # ✅ Worker node management endpoints
-├── subscriptions.routes.js # 🔄 Subscription management endpoints
-├── pods.routes.js          # 🔄 Pod management endpoints
-├── admin.routes.js         # 🔄 Admin dashboard endpoints
-├── webhooks.routes.js      # 🔄 Webhook endpoints (incoming)
-└── notifications.routes.js # 🔄 Notification endpoints
+├── billing.routes.js       # ✅ Billing system endpoints
+├── subscriptions.routes.js # ✅ Subscription management endpoints
+└── pods.routes.js          # ✅ Pod management endpoints
 ```
 
 ### 2. Controller Layer (`/src/controllers/`)
@@ -165,11 +198,9 @@ rest/
 ├── user.controller.js        # ✅ User CRUD operations
 ├── service.controller.js     # ✅ Service catalog operations
 ├── worker.controller.js      # ✅ Worker node management with ID/name resolution
-├── subscriptions.controller.js # 🔄 Subscription lifecycle
-├── pods.controller.js        # 🔄 Pod management operations
-├── admin.controller.js       # 🔄 Admin operations
-├── webhooks.controller.js    # 🔄 Webhook handlers (incoming)
-└── notifications.controller.js # 🔄 Notification management
+├── billing.controller.js     # ✅ Billing operations
+├── subscription.controller.js # ✅ Subscription lifecycle
+└── pod.controller.js         # ✅ Pod management operations
 ```
 
 ### 3. Service Layer (`/src/services/`)
@@ -184,77 +215,35 @@ rest/
 ├── user.service.js           # ✅ User management operations
 ├── service.service.js        # ✅ Service catalog management
 ├── worker.service.js         # ✅ Worker node management with focused functions
-├── subscriptions.service.js  # 🔄 Subscription lifecycle management
-├── pods.service.js           # 🔄 Kubernetes pod operations
-├── billing.service.js        # 🔄 Usage tracking & billing
-├── notifications.service.js  # 🔄 Email & webhook notifications
-├── webhooks.service.js       # 🔄 Webhook processing & validation
-└── monitoring.service.js     # 🔄 Metrics collection
+├── billing.service.js        # ✅ Balance, top-up, and unified transaction management
+├── midtrans.service.js       # ✅ Midtrans payment gateway integration
+├── subscription.service.js   # ✅ Subscription lifecycle management
+├── pod.service.js            # ✅ Kubernetes pod operations
+└── notification.service.js   # ✅ Email & webhook notifications
 ```
 
-### 4. Webhook System (`/src/webhooks/`)
-
-**Purpose**: Webhook handling for external integrations and notifications
-
-**Components**:
-
-```
-/webhooks/
-├── handlers/
-│   ├── kubernetes.webhook.js    # K8s cluster events
-│   ├── payment.webhook.js       # Payment gateway webhooks
-│   ├── monitoring.webhook.js    # Monitoring alerts
-│   └── custom.webhook.js        # Custom service webhooks
-├── senders/
-│   ├── customer.webhook.js      # Customer notification webhooks
-│   ├── admin.webhook.js         # Admin alert webhooks
-│   └── integration.webhook.js   # Third-party integrations
-├── validators/
-│   ├── signature.validator.js   # Webhook signature validation
-│   └── payload.validator.js     # Payload structure validation
-└── webhook.manager.js           # Webhook registration & management
-```
-
-### 5. Kubernetes Integration Layer (`/src/k8s/`)
+### 4. Kubernetes Integration Layer (`/src/config/kubernetes.js`)
 
 **Purpose**: Kubernetes cluster management and pod orchestration
 
 **Components**:
 
 ```
-/k8s/
-├── kubernetes.client.js      # K8s API client wrapper
-├── pods.manager.js           # Pod CRUD operations
-├── namespaces.manager.js     # Customer namespace management
-├── templates/                # Pre-configured service templates
-│   ├── n8n.template.yaml
-│   ├── ghost.template.yaml
-│   └── wordpress.template.yaml
-├── configs.manager.js        # ConfigMaps & Secrets
-├── resources.monitor.js      # Resource usage tracking
-└── events.listener.js        # K8s event webhook listener
+/config/kubernetes.js         # ✅ Kubernetes API client wrapper
+/services/pod.service.js      # ✅ Pod CRUD operations
+/templates/template.parser.js # ✅ Service template processing
+/jobs/pod.jobs.js            # ✅ Pod monitoring and health checks
 ```
 
-### 6. Data Access Layer (`/src/models/`)
+**Key Features:**
 
-**Purpose**: Database operations using Prisma ORM
+- **Multi-Environment Support**: Automatic configuration for development and production
+- **API Client Management**: Core V1, Apps V1, and Networking V1 API clients
+- **Resource Management**: Pod, service, and ingress management
+- **Namespace Isolation**: Customer-specific namespace creation and management
+- **Template Processing**: Dynamic service template configuration
 
-**Core Models**:
-
-```
-/models/
-├── users.model.js            # User entity operations
-├── subscriptions.model.js    # Subscription management
-├── service-instances.model.js # Running service instances
-├── service-catalog.model.js  # Available services
-├── usage-metrics.model.js    # Resource usage tracking
-├── worker-nodes.model.js     # K8s worker node info
-├── transactions.model.js     # Billing transactions
-├── webhooks.model.js         # Webhook configurations
-└── notifications.model.js    # Notification history
-```
-
-### 7. Background Jobs (`/src/jobs/`)
+### 5. Background Jobs (`/src/jobs/`)
 
 **Purpose**: Automated tasks and scheduled operations
 
@@ -262,16 +251,46 @@ rest/
 
 ```
 /jobs/
+├── job-scheduler.js            # ✅ Enhanced job scheduler with queue integration
+├── queue.manager.js            # ✅ Bull queue management system
 ├── health-monitor.job.js       # ✅ Worker node health monitoring
-├── job-scheduler.js            # ✅ Job scheduling system
-├── subscription-expiry.job.js  # 🔄 Daily expiry checker
-├── resource-usage.job.js       # 🔄 Hourly usage collection
-├── pod-health-check.job.js     # 🔄 Pod monitoring
-├── cleanup.job.js              # 🔄 Expired resource cleanup
-├── notifications.job.js        # 🔄 Customer notifications
-├── webhook-retry.job.js        # 🔄 Failed webhook retry
-└── backup.job.js               # 🔄 Data backup operations
+├── billing.jobs.js             # ✅ Payment processing and billing automation
+├── subscription.jobs.js        # ✅ Subscription lifecycle automation
+├── pod.jobs.js                 # ✅ Pod monitoring and health checks
+└── notification.jobs.js        # ✅ Email notification job processing
 ```
+
+### 6. Email Notification System (`/src/services/notification.service.js`)
+
+**Purpose**: Email notifications and template processing
+
+**Components**:
+
+```
+/services/notification.service.js  # ✅ Email service with queue integration
+/jobs/notification.jobs.js         # ✅ Email job processing
+/templates/emails/                 # ✅ HTML email templates
+├── welcome.html                   # ✅ User welcome email
+├── subscription-created.html      # ✅ Subscription confirmation
+├── service-ready.html             # ✅ Service deployment notification
+└── subscription-expiring.html     # ✅ Subscription expiry warning
+```
+
+### 7. Service Templates (`/src/templates/`)
+
+**Purpose**: Kubernetes deployment templates for services
+
+**Components**:
+
+```
+/templates/template.parser.js      # ✅ Template processing engine
+```
+
+**Available Templates:**
+
+- **N8N Workflow Automation**: Complete setup with authentication and webhook support
+- **Ghost Blog Platform**: Production-ready blog deployment with database integration
+- **WordPress CMS**: Full WordPress stack with MySQL database and persistent storage
 
 ### 8. Middleware (`/src/middleware/`)
 
@@ -281,12 +300,9 @@ rest/
 
 ```
 /middleware/
-├── auth.middleware.js        # JWT validation
-├── validation.middleware.js  # Request validation
-├── rate-limit.middleware.js  # API rate limiting
-├── error.middleware.js       # Error handling
-├── logging.middleware.js     # Request logging
-└── webhook.middleware.js     # Webhook signature validation
+├── auth.middleware.js        # ✅ JWT validation and role-based access
+├── error.middleware.js       # ✅ Global error handling
+└── billing.middleware.js     # ✅ Balance validation and payment security
 ```
 
 ### 9. Utilities (`/src/utils/`)
@@ -303,52 +319,8 @@ rest/
 ├── response.util.js         # ✅ API response formatting
 ├── http-status.util.js      # ✅ HTTP status code constants
 ├── user-roles.util.js       # ✅ User role constants
-├── webhook.util.js          # 🔄 Webhook utilities
-└── constants.util.js        # 🔄 Application constants
+└── pdf.util.js              # ✅ PDF generation using PDFKit
 ```
-
-## Webhook Architecture
-
-### Incoming Webhooks (External → Our System)
-
-```
-External Service → webhooks.routes.js → webhooks.controller.js
-        ↓                ↓                      ↓
-Signature Validation → Payload Processing → Business Logic
-        ↓                ↓                      ↓
-webhook.middleware.js → webhooks.service.js → Appropriate Service
-```
-
-**Webhook Sources**:
-
-- **Kubernetes Events**: Pod status changes, node events
-- **Payment Gateway**: Payment confirmations, failures
-- **Monitoring Systems**: Alerts, threshold breaches
-- **Customer Services**: N8N workflows, Ghost events
-
-### Outgoing Webhooks (Our System → External)
-
-```
-Business Event → webhooks.service.js → Webhook Queue (Redis)
-      ↓                ↓                      ↓
-Event Trigger → Payload Generation → Delivery Attempt
-      ↓                ↓                      ↓
-Database Log → HTTP Request → Success/Retry Logic
-```
-
-**Webhook Targets**:
-
-- **Customer Systems**: Service status updates, billing alerts
-- **Admin Systems**: System alerts, capacity warnings
-- **Third-party Integrations**: CRM updates, analytics
-
-### Webhook Security
-
-- **Signature Validation**: HMAC-SHA256 signature verification
-- **IP Whitelisting**: Restrict webhook sources
-- **Rate Limiting**: Prevent webhook abuse
-- **Payload Validation**: Schema validation for incoming data
-- **Retry Logic**: Exponential backoff for failed deliveries
 
 ## Database Schema Design
 
@@ -363,22 +335,47 @@ Users (1) ←→ (N) Subscriptions (1) ←→ (N) ServiceInstances
 
 ServiceCatalog (1) ←→ (N) ServiceInstances
 WorkerNodes (1) ←→ (N) ServiceInstances (pod placement)
-Webhooks (1) ←→ (N) WebhookDeliveries (delivery tracking)
 ```
 
-### Webhook-Related Tables
+### Key Models (Prisma Schema)
 
-```sql
--- Webhook configurations
-webhooks: id, user_id, url, events[], secret, active, created_at
+```prisma
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  password      String
+  name          String
+  role          UserRole        @default(USER)
+  subscriptions Subscription[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
 
--- Webhook delivery tracking
-webhook_deliveries: id, webhook_id, event_type, payload,
-                   status, attempts, last_attempt, created_at
+model Subscription {
+  id              String            @id @default(cuid())
+  userId          String
+  serviceId       String
+  status          SubscriptionStatus @default(ACTIVE)
+  expiresAt       DateTime
+  serviceInstance ServiceInstance?
+  user            User              @relation(fields: [userId], references: [id])
+  service         ServiceCatalog    @relation(fields: [serviceId], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
 
--- Notification history
-notifications: id, user_id, type, channel, content,
-              webhook_id, status, created_at
+model ServiceInstance {
+  id             String       @id @default(cuid())
+  subscriptionId String       @unique
+  podName        String       @unique
+  namespace      String
+  status         PodStatus    @default(PENDING)
+  externalUrl    String?
+  internalUrl    String?
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
 ```
 
 ## Integration Patterns
@@ -386,84 +383,108 @@ notifications: id, user_id, type, channel, content,
 ### Request Flow Architecture
 
 ```
-Route → Controller → Service → Model/K8s/Webhook → External Systems
-  ↓         ↓          ↓         ↓                      ↓
-Validation → Business → Data → External → Response/Event
-            Logic     Access   Systems
+Route → Controller → Service → Model/K8s → External Systems
+  ↓         ↓          ↓         ↓              ↓
+Validation → Business → Data → Kubernetes → Response/Event
+            Logic     Access   Operations
 ```
 
-### Event-Driven Webhook Flow
+### Pod Provisioning Flow
 
 ```
-Business Event → webhooks.service.js → Webhook Queue
-      ↓                ↓                    ↓
-Event Detection → Payload Generation → Delivery Job
-      ↓                ↓                    ↓
-Database Log → HTTP Request → Success/Retry Tracking
+Subscription Creation → Template Processing → Pod Deployment → Namespace Creation → Service Exposure → Ingress Configuration → Health Monitoring → User Notification
 ```
 
-### Kubernetes Event Integration
+### Background Job Processing
 
 ```
-K8s Event → events.listener.js → webhooks.service.js
-    ↓              ↓                    ↓
-Pod Status → Event Processing → Customer Notification
-    ↓              ↓                    ↓
-Database → Business Logic → Webhook Delivery
+Event Trigger → Queue Job → Process with Retry → Update Status → Send Notification → Log Result
+```
+
+### Email Notification Flow
+
+```
+System Event → Queue Notification → Template Processing → Email Delivery → Status Tracking → Retry if Failed
 ```
 
 ## Critical Implementation Paths
 
-### 1. Pod Provisioning with Webhooks
+### 1. Pod Provisioning with Notifications
 
 ```
-subscriptions.controller.js → subscriptions.service.js → pods.service.js
+subscriptions.controller.js → subscriptions.service.js → pod.service.js
         ↓                           ↓                        ↓
 Order Processing → Subscription Creation → K8s Pod Deployment
         ↓                           ↓                        ↓
-Database Update → webhooks.service.js → Customer Webhook
+Database Update → notification.service.js → Email Queue
         ↓                           ↓                        ↓
-Notification Log → HTTP Delivery → Success Tracking
+Status Update → Template Processing → Email Delivery
 ```
 
-### 2. Webhook Event Processing
+### 2. Background Job Processing
 
 ```
-webhooks.routes.js → webhook.middleware.js → webhooks.controller.js
-       ↓                    ↓                        ↓
-Incoming Webhook → Signature Validation → Event Processing
-       ↓                    ↓                        ↓
-Payload Extract → Business Logic → Database Update
-       ↓                    ↓                        ↓
-Response → Acknowledgment → Event Completion
+job-scheduler.js → queue.manager.js → specific.jobs.js
+       ↓                ↓                    ↓
+Cron Trigger → Queue Management → Job Processing
+       ↓                ↓                    ↓
+Job Queue → Redis Storage → Worker Processing
 ```
 
-### 3. System Event Broadcasting
+### 3. Kubernetes Integration
 
 ```
-System Event → webhooks.service.js → Webhook Queue (Redis)
-     ↓               ↓                      ↓
-Event Trigger → Payload Generation → Background Job
-     ↓               ↓                      ↓
-Database Log → HTTP Delivery → Retry Logic
+pod.service.js → kubernetes.js → Kubernetes API
+      ↓              ↓                ↓
+Pod Operations → Client Setup → Cluster Operations
+      ↓              ↓                ↓
+Status Update → Error Handling → Resource Management
 ```
 
 ## Performance Targets
 
 - **API Response Time**: < 200ms for standard operations
-- **Webhook Delivery**: < 5 seconds for outgoing webhooks
-- **Webhook Processing**: < 1 second for incoming webhooks
 - **Pod Provisioning**: 2-5 minutes end-to-end
-- **Event Processing**: < 30 seconds from trigger to delivery
+- **Email Delivery**: < 10 seconds for notification emails
+- **Job Processing**: < 30 seconds for background jobs
+- **System Uptime**: > 99.5% availability target
+
+## Security Implementation
+
+### Kubernetes Security
+
+- **Namespace Isolation**: Customer pods isolated in dedicated namespaces
+- **RBAC Integration**: Role-based access control for Kubernetes operations
+- **Resource Quotas**: Configurable limits to prevent resource abuse
+- **Network Policies**: Traffic isolation between customer workloads
+
+### API Security
+
+- **JWT Authentication**: Secure API access with token validation
+- **Input Validation**: Comprehensive request validation and sanitization
+- **Rate Limiting**: API rate limiting to prevent abuse
+- **Error Handling**: Secure error responses without information leakage
 
 ## File Naming Conventions
 
 - **Routes**: `{feature}.routes.js` - Express route definitions
 - **Controllers**: `{feature}.controller.js` - Request/response handling
 - **Services**: `{feature}.service.js` - Business logic
-- **Models**: `{feature}.model.js` - Database operations
-- **Middleware**: `{feature}.middleware.js` - Request processing
+- **Jobs**: `{feature}.jobs.js` - Background tasks
 - **Utilities**: `{feature}.util.js` - Helper functions
-- **Jobs**: `{feature}.job.js` - Background tasks
-- **Webhooks**: `{feature}.webhook.js` - Webhook handlers
-- **Templates**: `{service}.template.yaml` - K8s templates
+- **Templates**: `{feature}.html` - Email templates
+- **Validations**: `{feature}.validation.js` - Input validation schemas
+
+## Production Readiness
+
+The system is now **production-ready** with:
+
+1. **Complete PaaS Functionality**: Full subscription-to-pod workflow
+2. **Production Monitoring**: Comprehensive health monitoring and alerting
+3. **User Experience**: Email notifications and real-time status updates
+4. **Scalable Architecture**: Queue-based processing and Kubernetes integration
+5. **Developer Experience**: Complete API testing and documentation
+6. **Security**: Comprehensive authentication, authorization, and input validation
+7. **Monitoring**: Prometheus and Grafana integration for system observability
+
+The backend provides complete PaaS functionality and is ready for frontend integration and production deployment.

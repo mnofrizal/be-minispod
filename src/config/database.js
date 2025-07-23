@@ -5,11 +5,11 @@ import { PrismaClient } from "@prisma/client";
  * Centralized database configuration
  */
 const prisma = new PrismaClient({
-  log:
-    process.env.NODE_ENV === "development"
-      ? ["query", "info", "warn", "error"]
-      : ["error"],
-  errorFormat: "pretty",
+  // log:
+  //   process.env.NODE_ENV === "development"
+  //     ? ["query", "info", "warn", "error"]
+  //     : ["error"],
+  // errorFormat: "pretty",
 });
 
 /**

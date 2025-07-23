@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscription Created - {{serviceName}}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #007bff;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #28a745;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #6c757d;
+            font-size: 16px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .service-info {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+        }
+        .service-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .info-value {
+            color: #6c757d;
+        }
+        .access-info {
+            background-color: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #007bff;
+        }
+        .access-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 15px;
+        }
+        .url-box {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+        .url-label {
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        .url-link {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .url-link:hover {
+            text-decoration: underline;
+        }
+        .credentials {
+            background-color: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #ffc107;
+        }
+        .credentials-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 15px;
+        }
+        .credential-item {
+            margin-bottom: 10px;
+        }
+        .credential-label {
+            font-weight: bold;
+            color: #856404;
+        }
+        .credential-value {
+            font-family: 'Courier New', monospace;
+            background-color: #ffffff;
+            padding: 5px 10px;
+            border-radius: 3px;
+            border: 1px solid #dee2e6;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffc107;
+        }
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+        }
+        .next-steps {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .next-steps-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .step {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+        }
+        .step::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .support-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+            color: #ffffff;
+        }
+        .button-secondary {
+            background-color: #6c757d;
+        }
+        .button-secondary:hover {
+            background-color: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🚀 PaaS Platform</div>
+            <div class="title">Subscription Created Successfully!</div>
+            <div class="subtitle">Your {{serviceName}} service is being deployed</div>
+        </div>
+
+        <div class="content">
+            <p>Hello <strong>{{userName}}</strong>,</p>
+            
+            <p>Great news! Your subscription has been created successfully and your {{serviceName}} service is now being deployed to our Kubernetes cluster.</p>
+
+            <div class="service-info">
+                <div class="service-name">{{serviceName}} {{serviceVariant}}</div>
+                <div class="info-row">
+                    <span class="info-label">Subscription ID:</span>
+                    <span class="info-value">{{subscriptionId}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Service Type:</span>
+                    <span class="info-value">{{serviceName}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Plan:</span>
+                    <span class="info-value">{{serviceVariant}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="status-badge status-pending">{{status}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Created:</span>
+                    <span class="info-value">{{createdAt}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Expires:</span>
+                    <span class="info-value">{{expiresAt}}</span>
+                </div>
+            </div>
+
+            {{#if externalUrl}}
+            <div class="access-info">
+                <div class="access-title">🌐 Service Access Information</div>
+                <div class="url-label">External URL:</div>
+                <div class="url-box">
+                    <a href="{{externalUrl}}" class="url-link" target="_blank">{{externalUrl}}</a>
+                </div>
+                <div class="url-label">Internal URL:</div>
+                <div class="url-box">
+                    <span class="url-link">{{internalUrl}}</span>
+                </div>
+                <p><small><strong>Note:</strong> Your service may take 2-5 minutes to become fully available. You'll receive another email when it's ready.</small></p>
+            </div>
+            {{/if}}
+
+            {{#if credentials}}
+            <div class="credentials">
+                <div class="credentials-title">🔐 Service Credentials</div>
+                <p><strong>Important:</strong> Save these credentials securely. You'll need them to access your service.</p>
+                {{#each credentials}}
+                <div class="credential-item">
+                    <span class="credential-label">{{@key}}:</span>
+                    <span class="credential-value">{{this}}</span>
+                </div>
+                {{/each}}
+            </div>
+            {{/if}}
+
+            <div class="next-steps">
+                <div class="next-steps-title">📋 What happens next?</div>
+                <div class="step">Your {{serviceName}} service is being deployed to our Kubernetes cluster</div>
+                <div class="step">You'll receive an email notification when your service is ready (usually 2-5 minutes)</div>
+                <div class="step">Once ready, you can access your service using the provided URLs</div>
+                <div class="step">Monitor your service status through our dashboard</div>
+                <div class="step">Your subscription will auto-renew unless cancelled before expiry</div>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{dashboardUrl}}" class="button">View Dashboard</a>
+                <a href="{{supportUrl}}" class="button button-secondary">Get Support</a>
+            </div>
+
+            <div class="support-info">
+                <p><strong>Need help?</strong> Our support team is here to assist you.</p>
+                <p>📧 Email: support@paas-platform.com | 💬 Chat: Available 24/7</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Thank you for choosing our PaaS Platform!</p>
+            <p>This email was sent to {{userEmail}} regarding subscription {{subscriptionId}}</p>
+            <p>&copy; 2024 PaaS Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

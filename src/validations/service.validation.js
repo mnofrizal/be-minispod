@@ -53,6 +53,24 @@ const createServiceSchema = Joi.object({
       "any.required": "Service name is required",
     }),
 
+  // Service variant fields
+  variant: Joi.string()
+    .min(2)
+    .max(30)
+    .pattern(/^[a-z0-9-]+$/)
+    .default("standard")
+    .messages({
+      "string.min": "Variant must be at least 2 characters long",
+      "string.max": "Variant cannot exceed 30 characters",
+      "string.pattern.base":
+        "Variant must contain only lowercase letters, numbers, and hyphens",
+    }),
+
+  variantDisplayName: Joi.string().min(2).max(50).default("Standard").messages({
+    "string.min": "Variant display name must be at least 2 characters long",
+    "string.max": "Variant display name cannot exceed 50 characters",
+  }),
+
   displayName: Joi.string().min(2).max(100).required().messages({
     "string.min": "Display name must be at least 2 characters long",
     "string.max": "Display name cannot exceed 100 characters",
@@ -109,6 +127,13 @@ const createServiceSchema = Joi.object({
     "number.min": "Monthly price cannot be negative",
   }),
 
+  // Quota management
+  availableQuota: Joi.number().integer().min(-1).default(-1).messages({
+    "number.base": "Available quota must be a number",
+    "number.integer": "Available quota must be an integer",
+    "number.min": "Available quota must be -1 (unlimited) or 0 or greater",
+  }),
+
   // Template configuration
   dockerImage: Joi.string().required().messages({
     "any.required": "Docker image is required",
@@ -125,10 +150,62 @@ const createServiceSchema = Joi.object({
     "object.base":
       "Environment variables must be an object with string keys and values",
   }),
+
+  // Service variant metadata
+  category: Joi.string().min(2).max(50).messages({
+    "string.min": "Category must be at least 2 characters long",
+    "string.max": "Category cannot exceed 50 characters",
+  }),
+
+  tags: Joi.array().items(Joi.string().min(1).max(30)).max(10).messages({
+    "array.base": "Tags must be an array",
+    "array.max": "Cannot have more than 10 tags",
+    "string.min": "Each tag must be at least 1 character long",
+    "string.max": "Each tag cannot exceed 30 characters",
+  }),
+
+  icon: Joi.string().max(100).messages({
+    "string.max": "Icon path cannot exceed 100 characters",
+  }),
+
+  features: Joi.array().items(Joi.string().min(1).max(100)).max(20).messages({
+    "array.base": "Features must be an array",
+    "array.max": "Cannot have more than 20 features",
+    "string.min": "Each feature must be at least 1 character long",
+    "string.max": "Each feature cannot exceed 100 characters",
+  }),
+
+  sortOrder: Joi.number().integer().min(0).max(999).default(0).messages({
+    "number.base": "Sort order must be a number",
+    "number.integer": "Sort order must be an integer",
+    "number.min": "Sort order cannot be negative",
+    "number.max": "Sort order cannot exceed 999",
+  }),
+
+  isDefaultVariant: Joi.boolean().default(false).messages({
+    "boolean.base": "isDefaultVariant must be a boolean",
+  }),
 });
 
 // Update service validation (admin only)
 const updateServiceSchema = Joi.object({
+  // Service variant fields
+  variant: Joi.string()
+    .min(2)
+    .max(30)
+    .pattern(/^[a-z0-9-]+$/)
+    .messages({
+      "string.min": "Variant must be at least 2 characters long",
+      "string.max": "Variant cannot exceed 30 characters",
+      "string.pattern.base":
+        "Variant must contain only lowercase letters, numbers, and hyphens",
+    }),
+
+  variantDisplayName: Joi.string().min(2).max(50).messages({
+    "string.min": "Variant display name must be at least 2 characters long",
+    "string.max": "Variant display name cannot exceed 50 characters",
+  }),
+
   displayName: Joi.string().min(2).max(100).messages({
     "string.min": "Display name must be at least 2 characters long",
     "string.max": "Display name cannot exceed 100 characters",
@@ -179,6 +256,13 @@ const updateServiceSchema = Joi.object({
     "number.min": "Monthly price cannot be negative",
   }),
 
+  // Quota management
+  availableQuota: Joi.number().integer().min(-1).messages({
+    "number.base": "Available quota must be a number",
+    "number.integer": "Available quota must be an integer",
+    "number.min": "Available quota must be -1 (unlimited) or 0 or greater",
+  }),
+
   // Template configuration
   dockerImage: Joi.string(),
 
@@ -192,6 +276,41 @@ const updateServiceSchema = Joi.object({
   environmentVars: Joi.object().pattern(Joi.string(), Joi.string()).messages({
     "object.base":
       "Environment variables must be an object with string keys and values",
+  }),
+
+  // Service variant metadata
+  category: Joi.string().min(2).max(50).messages({
+    "string.min": "Category must be at least 2 characters long",
+    "string.max": "Category cannot exceed 50 characters",
+  }),
+
+  tags: Joi.array().items(Joi.string().min(1).max(30)).max(10).messages({
+    "array.base": "Tags must be an array",
+    "array.max": "Cannot have more than 10 tags",
+    "string.min": "Each tag must be at least 1 character long",
+    "string.max": "Each tag cannot exceed 30 characters",
+  }),
+
+  icon: Joi.string().max(100).messages({
+    "string.max": "Icon path cannot exceed 100 characters",
+  }),
+
+  features: Joi.array().items(Joi.string().min(1).max(100)).max(20).messages({
+    "array.base": "Features must be an array",
+    "array.max": "Cannot have more than 20 features",
+    "string.min": "Each feature must be at least 1 character long",
+    "string.max": "Each feature cannot exceed 100 characters",
+  }),
+
+  sortOrder: Joi.number().integer().min(0).max(999).messages({
+    "number.base": "Sort order must be a number",
+    "number.integer": "Sort order must be an integer",
+    "number.min": "Sort order cannot be negative",
+    "number.max": "Sort order cannot exceed 999",
+  }),
+
+  isDefaultVariant: Joi.boolean().messages({
+    "boolean.base": "isDefaultVariant must be a boolean",
   }),
 })
   .min(1)
@@ -238,6 +357,19 @@ const getServicesQuerySchema = Joi.object({
   }),
 });
 
+// Grouped services query validation
+const getGroupedServicesQuerySchema = Joi.object({
+  search: Joi.string().min(1).max(100).messages({
+    "string.min": "Search term must be at least 1 character",
+    "string.max": "Search term cannot exceed 100 characters",
+  }),
+
+  category: Joi.string().min(1).max(50).messages({
+    "string.min": "Category must be at least 1 character",
+    "string.max": "Category cannot exceed 50 characters",
+  }),
+});
+
 export {
   validate,
   createServiceSchema,
@@ -245,4 +377,5 @@ export {
   serviceIdSchema,
   serviceNameSchema,
   getServicesQuerySchema,
+  getGroupedServicesQuerySchema,
 };

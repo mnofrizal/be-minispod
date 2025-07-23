@@ -12,12 +12,12 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # Scrape the PaaS backend application metrics
-  - job_name: "paas-backend"
-    static_configs:
-      - targets: ["host.docker.internal:3000"]
-    metrics_path: "/metrics"
-    scrape_interval: 30s
+  # Scrape the PaaS backend application metrics (DISABLED)
+  # - job_name: "paas-backend"
+  #   static_configs:
+  #     - targets: ["host.docker.internal:3000"]
+  #   metrics_path: "/metrics"
+  #   scrape_interval: 30s
 
   # Scrape Node.js application metrics
   - job_name: "node-exporter"

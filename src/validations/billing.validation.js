@@ -42,18 +42,30 @@ export const midtransWebhookValidation = Joi.object({
 
 // Subscription creation with balance check
 export const subscriptionWithBalanceValidation = Joi.object({
-  serviceId: Joi.string().uuid().required(),
+  serviceId: Joi.string().min(20).max(30).required().messages({
+    "string.min": "Service ID must be at least 20 characters",
+    "string.max": "Service ID must be at most 30 characters",
+    "any.required": "Service ID is required",
+  }),
   confirmBalance: Joi.boolean().default(false), // User confirms sufficient balance
 });
 
-// Top-up transaction ID validation
+// Top-up transaction ID validation (accepts CUID format)
 export const topUpIdValidation = Joi.object({
-  id: Joi.string().uuid().required(),
+  id: Joi.string().min(20).max(30).required().messages({
+    "string.min": "Top-up transaction ID must be at least 20 characters",
+    "string.max": "Top-up transaction ID must be at most 30 characters",
+    "any.required": "Top-up transaction ID is required",
+  }),
 });
 
-// Invoice ID validation
+// Invoice ID validation (accepts CUID format)
 export const invoiceIdValidation = Joi.object({
-  id: Joi.string().uuid().required(),
+  id: Joi.string().min(20).max(30).required().messages({
+    "string.min": "Invoice ID must be at least 20 characters",
+    "string.max": "Invoice ID must be at most 30 characters",
+    "any.required": "Invoice ID is required",
+  }),
 });
 
 // Unified transaction list validation

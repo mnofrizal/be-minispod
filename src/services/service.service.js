@@ -56,6 +56,15 @@ const getAllServices = async (options = {}) => {
           dockerImage: true,
           containerPort: true,
           environmentVars: true,
+          availableQuota: true,
+          variant: true,
+          variantDisplayName: true,
+          sortOrder: true,
+          isDefaultVariant: true,
+          category: true,
+          tags: true,
+          icon: true,
+          features: true,
           createdAt: true,
           updatedAt: true,
           _count: {
@@ -147,6 +156,15 @@ const getActiveServicesAdmin = async () => {
         memRequest: true,
         memLimit: true,
         environmentVars: true,
+        availableQuota: true,
+        variant: true,
+        variantDisplayName: true,
+        sortOrder: true,
+        isDefaultVariant: true,
+        category: true,
+        tags: true,
+        icon: true,
+        features: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -235,6 +253,15 @@ const getServiceByName = async (serviceName) => {
         dockerImage: true,
         containerPort: true,
         environmentVars: true,
+        availableQuota: true,
+        variant: true,
+        variantDisplayName: true,
+        sortOrder: true,
+        isDefaultVariant: true,
+        category: true,
+        tags: true,
+        icon: true,
+        features: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -322,6 +349,15 @@ const createService = async (serviceData) => {
         dockerImage: true,
         containerPort: true,
         environmentVars: true,
+        availableQuota: true,
+        variant: true,
+        variantDisplayName: true,
+        sortOrder: true,
+        isDefaultVariant: true,
+        category: true,
+        tags: true,
+        icon: true,
+        features: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -376,6 +412,15 @@ const updateService = async (serviceId, updateData) => {
         dockerImage: true,
         containerPort: true,
         environmentVars: true,
+        availableQuota: true,
+        variant: true,
+        variantDisplayName: true,
+        sortOrder: true,
+        isDefaultVariant: true,
+        category: true,
+        tags: true,
+        icon: true,
+        features: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -542,6 +587,189 @@ const getServiceStats = async () => {
   }
 };
 
+/**
+ * Get grouped services (for frontend - one card per service with variants)
+ * @param {Object} options - Query options
+ * @param {string} options.search - Search term
+ * @param {string} options.category - Category filter
+ * @returns {Promise<Object>} Grouped services with variants
+ */
+const getGroupedServices = async (options = {}) => {
+  try {
+    const { search, category } = options;
+
+    const where = {
+      isActive: true,
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { displayName: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
+        ],
+      }),
+      ...(category && { category }),
+    };
+
+    // Get all services ordered by name and variant sort order
+    const allServices = await prisma.serviceCatalog.findMany({
+      where,
+      orderBy: [{ name: "asc" }, { sortOrder: "asc" }],
+    });
+
+    // Group services by base name
+    const groupedMap = new Map();
+
+    allServices.forEach((service) => {
+      if (!groupedMap.has(service.name)) {
+        groupedMap.set(service.name, {
+          name: service.name,
+          displayName: service.displayName,
+          description: service.description,
+          category: service.category,
+          tags: service.tags || [],
+          icon: service.icon,
+          variants: [],
+        });
+      }
+
+      const group = groupedMap.get(service.name);
+
+      // Convert memory format from Mi/Gi to MB/GB for user-friendly display
+      const convertMemoryFormat = (memValue) => {
+        if (!memValue) return memValue;
+        return memValue.replace(/Mi$/, "MB RAM").replace(/Gi$/, "GB RAM");
+      };
+
+      // Add CPU suffix for user-friendly display
+      const formatCpuSpec = (cpuValue) => {
+        if (!cpuValue) return cpuValue;
+        return `${cpuValue} CPU`;
+      };
+
+      group.variants.push({
+        id: service.id,
+        variant: service.variant,
+        variantDisplayName: service.variantDisplayName,
+        description: service.description,
+        cpuSpec: formatCpuSpec(service.cpuRequest),
+        memSpec: convertMemoryFormat(service.memRequest),
+        monthlyPrice: service.monthlyPrice,
+        availableQuota: service.availableQuota,
+        isDefault: service.isDefaultVariant,
+        features: service.features || [],
+        sortOrder: service.sortOrder,
+      });
+    });
+
+    // Convert map to array and sort variants within each group
+    const groupedServices = Array.from(groupedMap.values()).map((group) => ({
+      ...group,
+      variants: group.variants.sort((a, b) => a.sortOrder - b.sortOrder),
+    }));
+
+    logger.info(`Retrieved ${groupedServices.length} grouped services`);
+
+    return {
+      services: groupedServices,
+      total: groupedServices.length,
+    };
+  } catch (error) {
+    logger.error("Error getting grouped services:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get service variants by base service name
+ * @param {string} serviceName - Base service name
+ * @returns {Promise<Object>} Service with all variants
+ */
+const getServiceVariants = async (serviceName) => {
+  try {
+    const variants = await prisma.serviceCatalog.findMany({
+      where: {
+        name: serviceName,
+        isActive: true,
+      },
+      orderBy: { sortOrder: "asc" },
+    });
+
+    if (variants.length === 0) {
+      const error = new Error("Service not found");
+      error.code = "SERVICE_NOT_FOUND";
+      throw error;
+    }
+
+    const baseService = variants[0];
+
+    const result = {
+      serviceName: baseService.name,
+      displayName: baseService.displayName,
+      description: baseService.description,
+      category: baseService.category,
+      tags: baseService.tags || [],
+      icon: baseService.icon,
+      variants: variants.map((variant) => ({
+        id: variant.id,
+        variant: variant.variant,
+        variantDisplayName: variant.variantDisplayName,
+        description: variant.description,
+        cpuRequest: variant.cpuRequest,
+        cpuLimit: variant.cpuLimit,
+        memRequest: variant.memRequest,
+        memLimit: variant.memLimit,
+        monthlyPrice: variant.monthlyPrice,
+        isDefault: variant.isDefaultVariant,
+        features: variant.features || [],
+        dockerImage: variant.dockerImage,
+        containerPort: variant.containerPort,
+        environmentVars: variant.environmentVars,
+        sortOrder: variant.sortOrder,
+      })),
+    };
+
+    logger.info(
+      `Retrieved ${variants.length} variants for service: ${serviceName}`
+    );
+
+    return result;
+  } catch (error) {
+    logger.error(`Error getting service variants for ${serviceName}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get service categories
+ * @returns {Promise<Array>} List of unique categories
+ */
+const getServiceCategories = async () => {
+  try {
+    const categories = await prisma.serviceCatalog.findMany({
+      where: {
+        isActive: true,
+        category: { not: null },
+      },
+      select: {
+        category: true,
+      },
+      distinct: ["category"],
+    });
+
+    const categoryList = categories
+      .map((item) => item.category)
+      .filter(Boolean)
+      .sort();
+
+    logger.info(`Retrieved ${categoryList.length} service categories`);
+
+    return categoryList;
+  } catch (error) {
+    logger.error("Error getting service categories:", error);
+    throw error;
+  }
+};
+
 export {
   getAllServices,
   getActiveServices,
@@ -553,4 +781,7 @@ export {
   deleteService,
   toggleServiceStatus,
   getServiceStats,
+  getGroupedServices,
+  getServiceVariants,
+  getServiceCategories,
 };

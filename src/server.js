@@ -10,6 +10,7 @@ import logger from "./utils/logger.util.js";
 import errorMiddleware from "./middleware/error.middleware.js";
 import * as responseUtil from "./utils/response.util.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
+import { initializeKubernetes } from "./config/kubernetes.js";
 import jobScheduler from "./jobs/job-scheduler.js";
 
 // Import routes
@@ -96,14 +97,14 @@ app.use(errorMiddleware);
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
-  jobScheduler.stop();
+  await jobScheduler.stop();
   await disconnectDatabase();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   logger.info("SIGINT received, shutting down gracefully");
-  jobScheduler.stop();
+  await jobScheduler.stop();
   await disconnectDatabase();
   process.exit(0);
 });
@@ -114,8 +115,18 @@ const startServer = async () => {
     // Connect to database
     await connectDatabase();
 
+    // Initialize Kubernetes client
+    const k8sConfig = await initializeKubernetes();
+    if (k8sConfig) {
+      logger.info(`☸️  Kubernetes client initialized successfully`);
+    } else {
+      logger.warn(
+        `⚠️  Kubernetes client initialization failed - pod operations will be unavailable`
+      );
+    }
+
     // Start job scheduler
-    jobScheduler.start();
+    await jobScheduler.start();
 
     // Start Express server
     app.listen(PORT, () => {
@@ -127,6 +138,9 @@ const startServer = async () => {
       logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
       logger.info(`💾 Database connected successfully`);
       logger.info(`⏰ Background jobs started successfully`);
+      if (k8sConfig) {
+        logger.info(`☸️  Kubernetes integration ready`);
+      }
     });
   } catch (error) {
     logger.error("Failed to start server:", error);

@@ -6,6 +6,10 @@ import {
   updateWorkerMetrics,
 } from "./health-monitor.job.js";
 import { startBillingJobs, stopBillingJobs } from "./billing.jobs.js";
+import queueManager from "./queue.manager.js";
+import subscriptionJobs from "./subscription.jobs.js";
+import podJobs from "./pod.jobs.js";
+import notificationJobs from "./notification.jobs.js";
 
 /**
  * Job scheduler for background tasks
@@ -16,12 +20,43 @@ class JobScheduler {
   constructor() {
     this.jobs = new Map();
     this.isRunning = false;
+    this.queueInitialized = false;
+  }
+
+  /**
+   * Initialize Bull queue system
+   */
+  async initializeQueues() {
+    try {
+      logger.info("Initializing queue system...");
+
+      // Initialize queue manager
+      await queueManager.initialize();
+
+      // Initialize job processors
+      await subscriptionJobs.initialize();
+      await podJobs.initialize();
+      await notificationJobs.initialize();
+
+      // Schedule recurring jobs
+      await subscriptionJobs.scheduleRecurringJobs();
+      await podJobs.scheduleRecurringJobs();
+
+      this.queueInitialized = true;
+      logger.info("Queue system initialized successfully");
+    } catch (error) {
+      logger.error("Failed to initialize queue system:", error);
+      // Don't throw error - allow scheduler to start without queues
+      logger.warn(
+        "Continuing without queue system - some features may be limited"
+      );
+    }
   }
 
   /**
    * Start all scheduled jobs
    */
-  start() {
+  async start() {
     if (this.isRunning) {
       logger.warn("Job scheduler is already running");
       return;
@@ -30,6 +65,8 @@ class JobScheduler {
     logger.info("Starting job scheduler...");
 
     try {
+      // Initialize Bull queue system
+      await this.initializeQueues();
       // Health monitoring job - every 2 minutes
       const healthCheckJob = cron.schedule(
         "*/2 * * * *",
@@ -114,7 +151,7 @@ class JobScheduler {
   /**
    * Stop all scheduled jobs
    */
-  stop() {
+  async stop() {
     if (!this.isRunning) {
       logger.warn("Job scheduler is not running");
       return;
@@ -123,7 +160,7 @@ class JobScheduler {
     logger.info("Stopping job scheduler...");
 
     try {
-      // Stop all jobs
+      // Stop all cron jobs
       for (const [name, job] of this.jobs) {
         job.stop();
         logger.debug(`Stopped job: ${name}`);
@@ -131,6 +168,12 @@ class JobScheduler {
 
       // Stop billing jobs
       stopBillingJobs();
+
+      // Close queue manager
+      if (this.queueInitialized) {
+        await queueManager.close();
+        this.queueInitialized = false;
+      }
 
       this.jobs.clear();
       this.isRunning = false;
@@ -157,11 +200,13 @@ class JobScheduler {
    * Get status of all jobs
    * @returns {Object} Job status information
    */
-  getStatus() {
+  async getStatus() {
     const status = {
       isRunning: this.isRunning,
+      queueInitialized: this.queueInitialized,
       totalJobs: this.jobs.size,
       jobs: [],
+      queues: {},
     };
 
     for (const [name, job] of this.jobs) {
@@ -170,6 +215,15 @@ class JobScheduler {
         running: job.running,
         scheduled: job.scheduled,
       });
+    }
+
+    // Get queue statistics if available
+    if (this.queueInitialized) {
+      try {
+        status.queues = await queueManager.getAllQueueStats();
+      } catch (error) {
+        logger.error("Failed to get queue stats:", error);
+      }
     }
 
     return status;

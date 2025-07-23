@@ -1,0 +1,403 @@
+### Subscription API Testing
+### Base URL: http://localhost:3000/api/v1
+
+# Variables
+@baseUrl = http://localhost:3000/api/v1
+@token = {{login_response.response.body.data.tokens.accessToken}}
+@userId = {{login_response.response.body.data.user.id}}
+@subscriptionId = {{create_subscription_response.response.body.data.id}}
+@serviceId = {{get_services_response.response.body.data[0].id}}
+
+### ============================================
+### AUTHENTICATION (Required for all requests)
+### ============================================
+
+### Login to get access token
+# @name login_response
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+### ============================================
+### SUBSCRIPTION ELIGIBILITY
+### ============================================
+
+### Check subscription eligibility for a service
+GET {{baseUrl}}/subscriptions/eligibility/{{serviceId}}
+Authorization: Bearer {{token}}
+
+### ============================================
+### SUBSCRIPTION CREATION
+### ============================================
+
+### Create new subscription
+# @name create_subscription_response
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "billingCycle": "monthly",
+  "subdomain": "my-custom-subdomain",
+  "customConfig": {
+    "theme": "dark",
+    "language": "en"
+  }
+}
+
+### Create subscription with minimal data
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}"
+}
+
+### Create subscription - Invalid service ID (should fail)
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "invalid-service-id"
+}
+
+### Create subscription - Missing service ID (should fail)
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "billingCycle": "monthly"
+}
+
+### ============================================
+### SUBSCRIPTION RETRIEVAL
+### ============================================
+
+### Get user subscriptions (default pagination)
+GET {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+
+### Get user subscriptions with pagination
+GET {{baseUrl}}/subscriptions?page=1&limit=5
+Authorization: Bearer {{token}}
+
+### Get user subscriptions filtered by status
+GET {{baseUrl}}/subscriptions?status=ACTIVE
+Authorization: Bearer {{token}}
+
+### Get user subscriptions with sorting
+GET {{baseUrl}}/subscriptions?sortBy=createdAt&sortOrder=desc
+Authorization: Bearer {{token}}
+
+### Get user subscriptions - complex query
+GET {{baseUrl}}/subscriptions?page=1&limit=10&status=ACTIVE&sortBy=expiresAt&sortOrder=asc
+Authorization: Bearer {{token}}
+
+### Get specific subscription details
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{token}}
+
+### Get subscription details - Invalid ID (should fail)
+GET {{baseUrl}}/subscriptions/invalid-subscription-id
+Authorization: Bearer {{token}}
+
+### ============================================
+### SUBSCRIPTION STATISTICS
+### ============================================
+
+### Get user subscription statistics
+GET {{baseUrl}}/subscriptions/stats
+Authorization: Bearer {{token}}
+
+### ============================================
+### SUBSCRIPTION USAGE METRICS
+### ============================================
+
+### Get subscription usage metrics
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/usage
+Authorization: Bearer {{token}}
+
+### Get subscription usage metrics with date range
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/usage?startDate=2024-01-01&endDate=2024-12-31
+Authorization: Bearer {{token}}
+
+### Get subscription usage metrics with granularity
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/usage?granularity=hour
+Authorization: Bearer {{token}}
+
+### ============================================
+### SUBSCRIPTION UPDATES
+### ============================================
+
+### Update subscription
+PUT {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE",
+  "autoRenew": true,
+  "customConfig": {
+    "theme": "light",
+    "language": "id",
+    "notifications": true
+  }
+}
+
+### Update subscription - Invalid status (should fail)
+PUT {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "INVALID_STATUS"
+}
+
+### ============================================
+### SUBSCRIPTION RENEWAL
+### ============================================
+
+### Renew subscription
+PUT {{baseUrl}}/subscriptions/{{subscriptionId}}/renew
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "billingCycle": "monthly",
+  "autoRenew": false
+}
+
+### Renew subscription with auto-renew
+PUT {{baseUrl}}/subscriptions/{{subscriptionId}}/renew
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "billingCycle": "yearly",
+  "autoRenew": true
+}
+
+### Renew subscription - Invalid ID (should fail)
+PUT {{baseUrl}}/subscriptions/invalid-subscription-id/renew
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "billingCycle": "monthly"
+}
+
+### ============================================
+### SUBSCRIPTION CANCELLATION
+### ============================================
+
+### Cancel subscription with reason
+DELETE {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "No longer needed",
+  "immediate": false
+}
+
+### Cancel subscription immediately
+DELETE {{baseUrl}}/subscriptions/cmdg71iwx000285r08ze1pvg1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Service not working properly",
+  "immediate": true
+}
+
+### Cancel subscription - minimal data
+DELETE {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### Cancel subscription - Invalid ID (should fail)
+DELETE {{baseUrl}}/subscriptions/invalid-subscription-id
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Test cancellation"
+}
+
+### ============================================
+### ADMIN SUBSCRIPTION ENDPOINTS
+### ============================================
+
+### Admin: Get all subscriptions
+GET {{baseUrl}}/subscriptions/admin/all
+Authorization: Bearer {{token}}
+
+### Admin: Get all subscriptions with filters
+GET {{baseUrl}}/subscriptions/admin/all?page=1&limit=20&status=ACTIVE
+Authorization: Bearer {{token}}
+
+### Admin: Get subscription statistics
+GET {{baseUrl}}/subscriptions/admin/stats
+Authorization: Bearer {{token}}
+
+### ============================================
+### ERROR HANDLING TESTS
+### ============================================
+
+### Test without authentication (should fail)
+GET {{baseUrl}}/subscriptions
+
+### Test with invalid token (should fail)
+GET {{baseUrl}}/subscriptions
+Authorization: Bearer invalid-token
+
+### Test with malformed JSON (should fail)
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "billingCycle": "monthly"
+  // Missing comma - malformed JSON
+}
+
+### Test with invalid billing cycle (should fail)
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "billingCycle": "invalid-cycle"
+}
+
+### Test with invalid subdomain (should fail)
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "subdomain": "ab"
+}
+
+### ============================================
+### EDGE CASES
+### ============================================
+
+### Create subscription when user has insufficient balance
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}"
+}
+
+### Try to create duplicate subscription (should fail)
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}"
+}
+
+### Renew already cancelled subscription (should fail)
+PUT {{baseUrl}}/subscriptions/{{subscriptionId}}/renew
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "billingCycle": "monthly"
+}
+
+### ============================================
+### PERFORMANCE TESTS
+### ============================================
+
+### Get large number of subscriptions
+GET {{baseUrl}}/subscriptions?limit=100
+Authorization: Bearer {{token}}
+
+### Get subscription usage with large date range
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/usage?startDate=2020-01-01&endDate=2024-12-31
+Authorization: Bearer {{token}}
+
+### ============================================
+### INTEGRATION TESTS
+### ============================================
+
+### Full subscription lifecycle test
+### 1. Check eligibility
+GET {{baseUrl}}/subscriptions/eligibility/{{serviceId}}
+Authorization: Bearer {{token}}
+
+### 2. Create subscription
+# @name lifecycle_subscription
+POST {{baseUrl}}/subscriptions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "billingCycle": "monthly"
+}
+
+### 3. Get subscription details
+GET {{baseUrl}}/subscriptions/{{lifecycle_subscription.response.body.data.id}}
+Authorization: Bearer {{token}}
+
+### 4. Get usage metrics
+GET {{baseUrl}}/subscriptions/{{lifecycle_subscription.response.body.data.id}}/usage
+Authorization: Bearer {{token}}
+
+### 5. Renew subscription
+PUT {{baseUrl}}/subscriptions/{{lifecycle_subscription.response.body.data.id}}/renew
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "billingCycle": "monthly"
+}
+
+### 6. Cancel subscription
+DELETE {{baseUrl}}/subscriptions/{{lifecycle_subscription.response.body.data.id}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Lifecycle test completed"
+}
+
+### ============================================
+### HELPER REQUESTS
+### ============================================
+
+### Get available services (for testing)
+# @name get_services_response
+GET {{baseUrl}}/services
+Authorization: Bearer {{token}}
+
+### Get user balance (for testing)
+GET {{baseUrl}}/billing/balance
+Authorization: Bearer {{token}}
+
+### Top up balance (for testing)
+POST {{baseUrl}}/billing/topup
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "amount": 100000
+}

@@ -8,6 +8,7 @@ import {
   serviceIdSchema,
   serviceNameSchema,
   getServicesQuerySchema,
+  getGroupedServicesQuerySchema,
 } from "../validations/service.validation.js";
 
 const router = express.Router();
@@ -18,6 +19,25 @@ const router = express.Router();
  * @access  Public
  */
 router.get("/", serviceController.getActiveServices);
+
+/**
+ * @route   GET /api/v1/services/grouped
+ * @desc    Get grouped services (for frontend - one card per service with variants)
+ * @access  Public
+ * @query   search, category
+ */
+router.get(
+  "/grouped",
+  validate(getGroupedServicesQuerySchema, "query"),
+  serviceController.getGroupedServices
+);
+
+/**
+ * @route   GET /api/v1/services/categories
+ * @desc    Get service categories
+ * @access  Public
+ */
+router.get("/categories", serviceController.getServiceCategories);
 
 /**
  * @route   GET /api/v1/services/admin
@@ -49,6 +69,17 @@ router.get(
   adminOnly,
   validate(serviceIdSchema, "params"),
   serviceController.getServiceById
+);
+
+/**
+ * @route   GET /api/v1/services/:name/variants
+ * @desc    Get all variants for a specific service
+ * @access  Public
+ */
+router.get(
+  "/:name/variants",
+  validate(serviceNameSchema, "params"),
+  serviceController.getServiceVariants
 );
 
 /**
