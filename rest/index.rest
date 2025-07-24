@@ -1,0 +1,25 @@
+### API Status - Get system status and route information
+GET http://localhost:3000/api/v1/status
+Content-Type: application/json
+
+### Health Check - System health
+GET http://localhost:3000/health
+Content-Type: application/json
+
+### Test User Authentication
+POST http://localhost:3000/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+
+### Test Admin Authentication
+POST http://localhost:3000/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}

@@ -1,0 +1,59 @@
+### Admin API Root - Get all admin endpoints
+GET http://localhost:3000/api/v1/admin/
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin System Information - Detailed system info
+GET http://localhost:3000/api/v1/admin/system
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Users - List all users
+GET http://localhost:3000/api/v1/admin/users
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Users - Get user statistics
+GET http://localhost:3000/api/v1/admin/users/stats
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Workers - List all worker nodes
+GET http://localhost:3000/api/v1/admin/workers
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Workers - Get cluster statistics
+GET http://localhost:3000/api/v1/admin/workers/stats
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Pods - List all pods across all users
+GET http://localhost:3000/api/v1/admin/pods
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Pods - Get pod statistics
+GET http://localhost:3000/api/v1/admin/pods/stats
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Pods - Get orphaned pods
+GET http://localhost:3000/api/v1/admin/pods/orphaned
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Pods - Debug Kubernetes state
+GET http://localhost:3000/api/v1/admin/pods/debug
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Billing - List all transactions
+GET http://localhost:3000/api/v1/admin/billing/transactions
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### Admin Billing - Get billing analytics
+GET http://localhost:3000/api/v1/admin/billing/analytics
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE

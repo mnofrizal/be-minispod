@@ -1,4 +1,8 @@
-import { podService } from "../services/pod.service.js";
+import {
+  getPodStatus,
+  deletePod,
+  restartPod,
+} from "../services/pod.service.js";
 import { prisma } from "../config/database.js";
 import { PodStatus } from "@prisma/client";
 import queueManager from "./queue.manager.js";
@@ -119,7 +123,7 @@ export const podJobs = {
 
       for (const instance of serviceInstances) {
         try {
-          const status = await podService.getPodStatus(instance.id);
+          const status = await getPodStatus(instance.id);
 
           // Update database status if changed
           if (status.status !== instance.status) {
@@ -183,7 +187,7 @@ export const podJobs = {
       );
 
       // Get pod status and metrics
-      const status = await podService.getPodStatus(serviceInstanceId);
+      const status = await getPodStatus(serviceInstanceId);
 
       if (
         status.status === PodStatus.RUNNING &&
@@ -238,7 +242,7 @@ export const podJobs = {
         `Deleting pod for service instance ${serviceInstanceId}, reason: ${reason}`
       );
 
-      await podService.deletePod(serviceInstanceId);
+      await deletePod(serviceInstanceId);
 
       logger.info(
         `Successfully deleted pod for service instance ${serviceInstanceId}`
@@ -280,10 +284,10 @@ export const podJobs = {
         }
 
         // Check if pod is still unhealthy
-        const status = await podService.getPodStatus(serviceInstanceId);
+        const status = await getPodStatus(serviceInstanceId);
 
         if ([PodStatus.FAILED, PodStatus.UNKNOWN].includes(status.status)) {
-          await podService.restartPod(serviceInstanceId);
+          await restartPod(serviceInstanceId);
 
           // Send notification about restart
           await queueManager.addJob(
@@ -326,7 +330,7 @@ export const podJobs = {
 
         for (const instance of unhealthyInstances) {
           try {
-            await podService.restartPod(instance.id);
+            await restartPod(instance.id);
             restartedCount++;
 
             // Add delay between restarts
@@ -371,7 +375,7 @@ export const podJobs = {
 
       for (const instance of serviceInstances) {
         try {
-          const status = await podService.getPodStatus(instance.id);
+          const status = await getPodStatus(instance.id);
 
           // Update status if changed
           if (status.status !== instance.status) {
@@ -441,7 +445,7 @@ export const podJobs = {
               instance.subscription.status
             )
           ) {
-            await podService.deletePod(instance.id);
+            await deletePod(instance.id);
             cleanedCount++;
           } else {
             // Try to restart if subscription is still active

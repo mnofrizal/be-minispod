@@ -241,11 +241,44 @@ const getClusterStats = async () => {
       return acc;
     }, {});
 
-    // Resource calculations
+    // Helper function to parse memory/storage strings (e.g., "32Gi", "1Ti", "500Mi")
+    const parseResourceString = (resourceStr) => {
+      if (!resourceStr || resourceStr === "0") return 0;
+
+      const match = resourceStr.match(/^(\d+(?:\.\d+)?)(.*)?$/);
+      if (!match) return 0;
+
+      const value = parseFloat(match[1]);
+      const unit = (match[2] || "").toLowerCase();
+
+      // Convert to GB for consistency
+      switch (unit) {
+        case "ki":
+          return value / 1024 / 1024; // KiB to GB
+        case "mi":
+          return value / 1024; // MiB to GB
+        case "gi":
+          return value; // GiB to GB
+        case "ti":
+          return value * 1024; // TiB to GB
+        case "k":
+          return value / 1000 / 1000; // KB to GB
+        case "m":
+          return value / 1000; // MB to GB
+        case "g":
+          return value; // GB to GB
+        case "t":
+          return value * 1000; // TB to GB
+        default:
+          return value; // Assume GB if no unit
+      }
+    };
+
+    // Resource calculations with proper unit parsing
     const totalResources = syncedNodes.reduce(
       (acc, node) => {
         acc.cpu += parseInt(node.cpuCores) || 0;
-        acc.memory += parseFloat(node.totalMemory) || 0;
+        acc.memory += parseResourceString(node.totalMemory);
         acc.pods += parseInt(node.maxPods) || 0;
         return acc;
       },
@@ -255,7 +288,7 @@ const getClusterStats = async () => {
     const allocatedResources = syncedNodes.reduce(
       (acc, node) => {
         acc.cpu += parseFloat(node.allocatedCPU) || 0;
-        acc.memory += parseFloat(node.allocatedMemory) || 0;
+        acc.memory += parseResourceString(node.allocatedMemory);
         acc.pods += parseInt(node.currentPods) || 0;
         return acc;
       },
@@ -792,9 +825,42 @@ const enrichNodeWithLiveData = async (dbNode, liveNode) => {
     const pods = await getPodsOnNode(dbNode.name);
     const currentPods = pods.length;
 
-    // Calculate allocated resources from running pods
+    // Helper function to parse memory/storage strings (e.g., "32Gi", "1Ti", "500Mi")
+    const parseResourceString = (resourceStr) => {
+      if (!resourceStr || resourceStr === "0") return 0;
+
+      const match = resourceStr.match(/^(\d+(?:\.\d+)?)(.*)?$/);
+      if (!match) return 0;
+
+      const value = parseFloat(match[1]);
+      const unit = (match[2] || "").toLowerCase();
+
+      // Convert to GB for consistency
+      switch (unit) {
+        case "ki":
+          return value / 1024 / 1024; // KiB to GB
+        case "mi":
+          return value / 1024; // MiB to GB
+        case "gi":
+          return value; // GiB to GB
+        case "ti":
+          return value * 1024; // TiB to GB
+        case "k":
+          return value / 1000 / 1000; // KB to GB
+        case "m":
+          return value / 1000; // MB to GB
+        case "g":
+          return value; // GB to GB
+        case "t":
+          return value * 1000; // TB to GB
+        default:
+          return value; // Assume GB if no unit
+      }
+    };
+
+    // Calculate allocated resources from running pods with proper unit parsing
     let allocatedCPU = 0;
-    let allocatedMemory = 0;
+    let allocatedMemoryGB = 0;
 
     for (const pod of pods) {
       const containers = pod.spec?.containers || [];
@@ -806,8 +872,7 @@ const enrichNodeWithLiveData = async (dbNode, liveNode) => {
           allocatedCPU += parseFloat(requests.cpu.replace("m", "")) / 1000;
         }
         if (requests.memory) {
-          const memStr = requests.memory.replace(/[^0-9]/g, "");
-          allocatedMemory += parseInt(memStr) || 0;
+          allocatedMemoryGB += parseResourceString(requests.memory);
         }
       }
     }
@@ -817,7 +882,7 @@ const enrichNodeWithLiveData = async (dbNode, liveNode) => {
       ...liveData,
       currentPods,
       allocatedCPU: allocatedCPU.toString(),
-      allocatedMemory: allocatedMemory.toString(),
+      allocatedMemory: allocatedMemoryGB.toString(),
       liveData: {
         conditions: liveNode.status?.conditions || [],
         capacity: liveNode.status?.capacity || {},

@@ -6,19 +6,19 @@ import {
   getUserBillingOverview,
   getAllUsersBilling,
   adjustUserBalance,
-} from "../controllers/admin-billing.controller.js";
-import { authenticate, adminOnly } from "../middleware/auth.middleware.js";
+} from "../../controllers/admin-billing.controller.js";
+import { authenticate, adminOnly } from "../../middleware/auth.middleware.js";
 import {
   validatePagination,
   validateDateRange,
   logBillingOperation,
-} from "../middleware/billing.middleware.js";
-import { validate } from "../utils/validation.util.js";
+} from "../../middleware/billing.middleware.js";
+import { validate } from "../../utils/validation.util.js";
 import {
   transactionIdValidation,
   userIdValidation,
   balanceAdjustmentValidation,
-} from "../validations/billing.validation.js";
+} from "../../validations/billing.validation.js";
 
 const router = express.Router();
 

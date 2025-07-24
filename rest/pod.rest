@@ -1,9 +1,6 @@
-### Pod Management API Testing
-### Phase 2 - Kubernetes Integration Tests
-
 @baseUrl = http://localhost:3000/api/v1
+@podId = {{{{get_all_response.response.body.data.pods[0].id}}}}
 @authToken = {{login_response.response.body.data.tokens.accessToken}}
-
 ### Login to get access token
 # @name login_response
 POST {{baseUrl}}/auth/login
@@ -14,371 +11,61 @@ Content-Type: application/json
   "password": "Admin123!@#"
 }
 
-### 2. Get user pods
-GET {{baseUrl}}/pods
+### Admin - Get all pods
+# @name get_all_response
+GET {{baseUrl}}/admin/pods
 Authorization: Bearer {{authToken}}
 
-### 3. Get user pods with pagination
-GET {{baseUrl}}/pods?page=1&limit=5
+### Admin - Get all pods with filters
+GET {{baseUrl}}/admin/pods?page=1&limit=10&status=RUNNING
 Authorization: Bearer {{authToken}}
 
-### 4. Get user pods filtered by status
-GET {{baseUrl}}/pods?status=RUNNING
+### Admin - Get pod statistics
+GET {{baseUrl}}/admin/pods/stats
 Authorization: Bearer {{authToken}}
 
-### 5. Get user pods filtered by service name
-GET {{baseUrl}}/pods?serviceName=n8n
+### Admin - Debug Kubernetes state
+GET {{baseUrl}}/admin/pods/debug
 Authorization: Bearer {{authToken}}
 
-### 6. Get specific pod details
-# @name podDetails
-GET {{baseUrl}}/pods/{{podId}}
+### Admin - Get orphaned pods
+GET {{baseUrl}}/admin/pods/orphaned
 Authorization: Bearer {{authToken}}
 
-### 7. Get pod status
-GET {{baseUrl}}/pods/{{podId}}/status
-Authorization: Bearer {{authToken}}
-
-### 8. Get pod logs
-GET {{baseUrl}}/pods/{{podId}}/logs
-Authorization: Bearer {{authToken}}
-
-### 9. Get pod logs with parameters
-GET {{baseUrl}}/pods/{{podId}}/logs?lines=50&timestamps=true
-Authorization: Bearer {{authToken}}
-
-### 10. Restart pod
-POST {{baseUrl}}/pods/{{podId}}/restart
-Authorization: Bearer {{authToken}}
-
-### 11. Update pod configuration
-PUT {{baseUrl}}/pods/{{podId}}/config
+### Admin - Cleanup orphaned pods
+DELETE {{baseUrl}}/admin/pods/orphaned
 Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
 {
-  "env": {
-    "DEBUG": "true",
-    "LOG_LEVEL": "debug"
-  },
-  "resources": {
-    "limits": {
-      "cpu": "1",
-      "memory": "1Gi"
-    },
-    "requests": {
-      "cpu": "0.5",
-      "memory": "512Mi"
-    }
-  }
+  "confirm": true
 }
 
-### 12. Get available service templates
-GET {{baseUrl}}/pods/templates
+### Admin - Get pod details
+GET {{baseUrl}}/admin/pods/{{podId}}
 Authorization: Bearer {{authToken}}
 
-### 13. Get specific template details
-GET {{baseUrl}}/pods/templates/n8n
+### Admin - Get pod logs
+GET {{baseUrl}}/admin/pods/{{podId}}/logs
 Authorization: Bearer {{authToken}}
 
-### 14. Get Ghost template details
-GET {{baseUrl}}/pods/templates/ghost
+### Admin - Get pod logs with options
+GET {{baseUrl}}/admin/pods/{{podId}}/logs?lines=50&timestamps=true
 Authorization: Bearer {{authToken}}
 
-### 15. Get WordPress template details
-GET {{baseUrl}}/pods/templates/wordpress
+### Admin - Restart any pod
+POST {{baseUrl}}/admin/pods/{{podId}}/restart
 Authorization: Bearer {{authToken}}
 
-### Error Testing
-
-### 16. Get non-existent pod
-GET {{baseUrl}}/pods/non-existent-id
+### Admin - Delete any pod
+DELETE {{baseUrl}}/admin/pods/{{podId}}
 Authorization: Bearer {{authToken}}
 
-### 17. Restart non-existent pod
-POST {{baseUrl}}/pods/non-existent-id/restart
-Authorization: Bearer {{authToken}}
-
-### 18. Get logs for non-existent pod
-GET {{baseUrl}}/pods/non-existent-id/logs
-Authorization: Bearer {{authToken}}
-
-### 19. Update config for non-existent pod
-PUT {{baseUrl}}/pods/non-existent-id/config
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "env": {
-    "TEST": "value"
-  }
-}
-
-### 20. Get non-existent template
-GET {{baseUrl}}/pods/templates/non-existent-template
-Authorization: Bearer {{authToken}}
-
-### Validation Testing
-
-### 21. Get pods with invalid pagination
-GET {{baseUrl}}/pods?page=0&limit=1000
-Authorization: Bearer {{authToken}}
-
-### 22. Get pods with invalid status
-GET {{baseUrl}}/pods?status=INVALID_STATUS
-Authorization: Bearer {{authToken}}
-
-### 23. Get logs with invalid parameters
-GET {{baseUrl}}/pods/{{podId}}/logs?lines=10000&since=invalid-date
-Authorization: Bearer {{authToken}}
-
-### 24. Update pod config with invalid data
-PUT {{baseUrl}}/pods/{{podId}}/config
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "env": "invalid-env-format",
-  "resources": {
-    "limits": {
-      "cpu": "invalid-cpu-value"
-    }
-  }
-}
-
-### Integration Testing
-
-### 25. Create subscription and monitor pod creation
-# First create a subscription
-POST {{baseUrl}}/subscriptions
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "serviceId": "{{serviceId}}",
-  "billingCycle": "monthly"
-}
-
-### 26. Check if pod was created for subscription
-# Wait a few seconds after subscription creation, then check pods
-GET {{baseUrl}}/pods
-Authorization: Bearer {{authToken}}
-
-### 27. Monitor pod status changes
-# Check pod status multiple times to see status progression
-GET {{baseUrl}}/pods/{{newPodId}}/status
-Authorization: Bearer {{authToken}}
-
-### 28. Test pod restart workflow
-POST {{baseUrl}}/pods/{{newPodId}}/restart
-Authorization: Bearer {{authToken}}
-
-### 29. Verify pod logs after restart
-GET {{baseUrl}}/pods/{{newPodId}}/logs?lines=20
-Authorization: Bearer {{authToken}}
-
-### 30. Test subscription cancellation and pod cleanup
-DELETE {{baseUrl}}/subscriptions/{{subscriptionId}}
-Authorization: Bearer {{authToken}}
-
-### Performance Testing
-
-### 31. Concurrent pod status requests
-GET {{baseUrl}}/pods/{{podId}}/status
-Authorization: Bearer {{authToken}}
-
-### 32. Large log retrieval
-GET {{baseUrl}}/pods/{{podId}}/logs?lines=1000
-Authorization: Bearer {{authToken}}
-
-### 33. Multiple pod listing requests
-GET {{baseUrl}}/pods?limit=50
-Authorization: Bearer {{authToken}}
-
-### Admin Testing - Requires ADMINISTRATOR role
-
-### 34. Admin: Get all pods across all users
-GET {{baseUrl}}/pods/admin/all
-Authorization: Bearer {{authToken}}
-
-### 35. Admin: Get all pods with pagination
-GET {{baseUrl}}/pods/admin/all?page=1&limit=10
-Authorization: Bearer {{authToken}}
-
-### 36. Admin: Get all pods with filters
-GET {{baseUrl}}/pods/admin/all?status=RUNNING&serviceName=n8n
-Authorization: Bearer {{authToken}}
-
-### 37. Admin: Get all pods filtered by user
-GET {{baseUrl}}/pods/admin/all?userId={{userId}}
-Authorization: Bearer {{authToken}}
-
-### 38. Admin: Get all pods filtered by worker node
-GET {{baseUrl}}/pods/admin/all?workerNode=worker-node-1
-Authorization: Bearer {{authToken}}
-
-### 39. Admin: Get all pods with comprehensive filters
-GET {{baseUrl}}/pods/admin/all?page=1&limit=5&status=RUNNING&serviceName=ghost&userId={{userId}}&workerNode=worker-node-2
-Authorization: Bearer {{authToken}}
-
-### 40. Admin: Get pod details (can access any pod)
-GET {{baseUrl}}/pods/admin/{{podId}}
-Authorization: Bearer {{authToken}}
-
-### 41. Admin: Restart any pod
-POST {{baseUrl}}/pods/admin/{{podId}}/action
+### Admin - Pod management action
+POST {{baseUrl}}/admin/pods/{{podId}}/action
 Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
 {
   "action": "restart"
 }
-
-### 42. Admin: Stop pod (not yet implemented)
-POST {{baseUrl}}/pods/admin/{{podId}}/action
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "action": "stop"
-}
-
-### 43. Admin: Delete pod (not yet implemented)
-POST {{baseUrl}}/pods/admin/{{podId}}/action
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "action": "delete"
-}
-
-### Admin Error Testing
-
-### 44. Test admin access with regular user (should fail)
-# First login as regular user
-POST {{baseUrl}}/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@test.com",
-  "password": "user123"
-}
-
-### 45. Try admin endpoint with regular user token (should fail with 403)
-GET {{baseUrl}}/pods/admin/all
-Authorization: Bearer {{login.response.body.data.accessToken}}
-
-### 46. Test invalid admin action
-POST {{baseUrl}}/pods/admin/{{podId}}/action
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "action": "invalid_action"
-}
-
-### 47. Test admin pod details with non-existent pod
-GET {{baseUrl}}/pods/admin/non-existent-pod-id
-Authorization: Bearer {{authToken}}
-
-### Orphaned Pod Management
-
-### 48. Get orphaned pods (pods in Kubernetes but not in database)
-GET {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-
-### 49. Clean up all orphaned pods (DANGEROUS - requires confirmation)
-DELETE {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "confirm": true
-}
-
-### 50. Clean up specific orphaned deployments
-DELETE {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "confirm": true,
-  "deployments": [
-    {
-      "deploymentName": "n8n-cmdg67pz-1753288888357",
-      "namespace": "customer-cmdg67pz"
-    }
-  ]
-}
-
-### 51. Clean up orphaned pods and empty namespaces
-DELETE {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "confirm": true,
-  "namespaces": ["customer-user123", "customer-user456"]
-}
-
-### 52. Test cleanup without confirmation (should fail)
-DELETE {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "confirm": false
-}
-
-### 53. Test cleanup with detailed logging (check server logs for debugging)
-DELETE {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{
-  "confirm": true
-}
-
-### 54. Verify cleanup results - check orphaned pods again after cleanup
-GET {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-
-### 55. Test cleanup with empty request body (should fail)
-DELETE {{baseUrl}}/pods/admin/orphaned
-Authorization: Bearer {{authToken}}
-Content-Type: application/json
-
-{}
-
-### Debugging Helpers
-
-### 56. Debug Kubernetes state (comprehensive cluster information)
-GET {{baseUrl}}/pods/admin/debug
-Authorization: Bearer {{authToken}}
-
-### 57. Check Kubernetes connection status
-GET {{baseUrl}}/workers
-Authorization: Bearer {{authToken}}
-
-### 58. Get all pods to compare with Kubernetes state
-GET {{baseUrl}}/pods/admin/all
-Authorization: Bearer {{authToken}}
-
-### Variables for testing
-# Replace these with actual values from your test environment
-# @podId = clxxx-example-pod-id
-# @serviceId = clxxx-example-service-id
-# @subscriptionId = clxxx-example-subscription-id
-# @newPodId = clxxx-new-pod-id
-
-### Notes:
-# 1. Make sure to have test data in your database before running these tests
-# 2. Replace {{podId}}, {{serviceId}}, etc. with actual IDs from your test environment
-# 3. Some tests require Kubernetes to be running and configured
-# 4. Pod operations may take time to complete - allow for delays
-# 5. Monitor server logs while running these tests to see background job processing
-# 6. For orphaned pod cleanup debugging:
-#    - Check server logs for detailed cleanup operations
-#    - Verify Kubernetes cluster connectivity
-#    - Use kubectl commands to manually verify pod deletion
-#    - Check if deployments have finalizers preventing deletion

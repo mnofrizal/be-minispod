@@ -1,6 +1,6 @@
 import express from "express";
-import { adminOnly } from "../middleware/auth.middleware.js";
-import * as userController from "../controllers/user.controller.js";
+import { adminOnly } from "../../middleware/auth.middleware.js";
+import * as userController from "../../controllers/user.controller.js";
 import {
   validate,
   createUserSchema,
@@ -8,7 +8,7 @@ import {
   changeUserPasswordSchema,
   userIdSchema,
   getUsersQuerySchema,
-} from "../validations/user.validation.js";
+} from "../../validations/user.validation.js";
 
 const router = express.Router();
 

@@ -25,7 +25,7 @@ The backend is designed as a **microservices-oriented monolith** using Express.j
 - **Local Development**: Complete k3d integration with auto-registration and heartbeat scripts
 - **Production Deployment**: Kubernetes DaemonSet for automatic worker node agents
 - **Kubernetes Integration**: Full @kubernetes/client-node integration with pod lifecycle management
-- **Pod Management System**: Complete pod provisioning, monitoring, restart, and cleanup with service templates
+- **Pod Management System**: Complete pod provisioning, monitoring, restart, stop, start, and cleanup with service templates, container port management, and local development access
 - **Service Templates**: Pre-configured templates for N8N, Ghost, and WordPress with dynamic configuration
 - **Email Notification System**: Complete email system with HTML templates and queue-based delivery
 - **Monitoring Integration**: Prometheus and Grafana setup for production monitoring
@@ -48,13 +48,16 @@ src/
 │   ├── error.middleware.js      # ✅ Global error handling
 │   └── billing.middleware.js    # ✅ Balance validation and payment security
 ├── routes/
+│   ├── index.routes.js         # ✅ Main route file with centralized route management
 │   ├── auth.routes.js          # ✅ Authentication endpoints
-│   ├── users.routes.js         # ✅ User management with validation
 │   ├── services.routes.js      # ✅ Service catalog with validation
-│   ├── workers.routes.js       # ✅ Worker node management with flexible validation
 │   ├── billing.routes.js       # ✅ Billing system endpoints with unified transactions
 │   ├── subscriptions.routes.js # ✅ Subscription management with credit-based flow
-│   └── pods.routes.js          # ✅ Pod management endpoints with Kubernetes operations
+│   └── admin/                  # ✅ Admin-only endpoints with proper security boundaries
+│       ├── users.routes.js     # ✅ Admin user management with validation
+│       ├── workers.routes.js   # ✅ Admin worker node management with flexible validation
+│       ├── billing.routes.js   # ✅ Admin billing management endpoints
+│       └── pods.routes.js      # ✅ Admin pod management endpoints with Kubernetes operations
 ├── services/
 │   ├── auth.service.js         # ✅ Authentication business logic
 │   ├── user.service.js         # ✅ User management business logic
@@ -106,12 +109,14 @@ prisma/
 
 rest/
 ├── auth.rest                   # ✅ Authentication API testing
-├── user.rest                   # ✅ User management API testing
 ├── service.rest                # ✅ Service catalog API testing
-├── worker.rest                 # ✅ Worker node management API testing
 ├── billing.rest                # ✅ Billing system API testing with unified transactions
 ├── subscription.rest           # ✅ Subscription management API testing
-└── pod.rest                    # ✅ Pod management API testing
+├── pod.rest                    # ✅ Admin pod management API testing
+├── worker.rest                 # ✅ Admin worker node management API testing
+├── admin-billing.rest          # ✅ Admin billing management API testing
+├── admin-users.rest            # ✅ Admin user management API testing
+└── admin-routes.rest           # ✅ Admin route testing overview
 
 monitoring/
 ├── prometheus.yml              # ✅ Prometheus configuration for metrics collection
@@ -177,14 +182,23 @@ monitoring/
 
 ```
 /routes/
+├── index.routes.js         # ✅ Main route file with centralized route management
 ├── auth.routes.js          # ✅ Authentication endpoints
-├── users.routes.js         # ✅ User management endpoints
 ├── services.routes.js      # ✅ Service catalog endpoints
-├── workers.routes.js       # ✅ Worker node management endpoints
 ├── billing.routes.js       # ✅ Billing system endpoints
 ├── subscriptions.routes.js # ✅ Subscription management endpoints
-└── pods.routes.js          # ✅ Pod management endpoints
+└── admin/                  # ✅ Admin-only endpoints with proper security boundaries
+    ├── users.routes.js     # ✅ Admin user management endpoints
+    ├── workers.routes.js   # ✅ Admin worker node management endpoints
+    ├── billing.routes.js   # ✅ Admin billing management endpoints
+    └── pods.routes.js      # ✅ Admin pod management endpoints
 ```
+
+**Route Architecture**:
+
+- **User Routes**: Mounted at `/api/v1/` for customer-facing endpoints
+- **Admin Routes**: Mounted at `/api/v1/admin/` for administrative endpoints with proper security boundaries
+- **Centralized Management**: All routes imported and mounted through `index.routes.js`
 
 ### 2. Controller Layer (`/src/controllers/`)
 
@@ -200,7 +214,7 @@ monitoring/
 ├── worker.controller.js      # ✅ Worker node management with ID/name resolution
 ├── billing.controller.js     # ✅ Billing operations
 ├── subscription.controller.js # ✅ Subscription lifecycle
-└── pod.controller.js         # ✅ Pod management operations
+└── pod.controller.js         # ✅ Pod management operations with individual function exports
 ```
 
 ### 3. Service Layer (`/src/services/`)

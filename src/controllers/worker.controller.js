@@ -1,18 +1,7 @@
-import {
-  getAllWorkerNodes,
-  getWorkerNodeById,
-  getWorkerNodeByName,
-  syncClusterState,
-  getClusterStats,
-  getOnlineWorkerNodes,
-  getOfflineWorkerNodes,
-  cordonNode,
-  uncordonNode,
-  drainNode,
-} from "../services/worker.service.js";
-import HTTP_STATUS from "../utils/http-status.util.js";
+import * as workerService from "../services/worker.service.js";
 import * as responseUtil from "../utils/response.util.js";
 import logger from "../utils/logger.util.js";
+import HTTP_STATUS from "../utils/http-status.util.js";
 import { resolveIdOrName } from "../utils/validation.util.js";
 
 /**
@@ -25,7 +14,7 @@ import { resolveIdOrName } from "../utils/validation.util.js";
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const getAllWorkerNodesController = async (req, res) => {
+const getAllWorkerNodes = async (req, res) => {
   try {
     const {
       page = 1,
@@ -55,13 +44,13 @@ const getAllWorkerNodesController = async (req, res) => {
       sortOrder,
     };
 
-    const result = await getAllWorkerNodes(options);
+    const result = await workerService.getAllWorkerNodes(options);
 
     logger.info(
       `Admin retrieved worker nodes with live K8s data - Page: ${page}, Total: ${result.pagination.total}`
     );
 
-    res.status(HTTP_STATUS.OK).json(
+    res.json(
       responseUtil.success(
         {
           workers: result.data,
@@ -71,7 +60,7 @@ const getAllWorkerNodesController = async (req, res) => {
       )
     );
   } catch (error) {
-    logger.error("Error in getAllWorkerNodesController:", error);
+    logger.error("Error in getAllWorkerNodes controller:", error);
     res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
@@ -89,7 +78,7 @@ const getAllWorkerNodesController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const getWorkerNodeByIdController = async (req, res) => {
+const getWorkerNodeById = async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -98,9 +87,9 @@ const getWorkerNodeByIdController = async (req, res) => {
 
     let workerNode;
     if (type === "id") {
-      workerNode = await getWorkerNodeById(value);
+      workerNode = await workerService.getWorkerNodeById(value);
     } else {
-      workerNode = await getWorkerNodeByName(value);
+      workerNode = await workerService.getWorkerNodeByName(value);
     }
 
     if (!workerNode) {
@@ -119,16 +108,14 @@ const getWorkerNodeByIdController = async (req, res) => {
       `Admin retrieved worker node with live K8s data: ${workerNode.name} (${type}: ${value})`
     );
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(
-        responseUtil.success(
-          workerNode,
-          "Worker node retrieved successfully with live Kubernetes data"
-        )
-      );
+    res.json(
+      responseUtil.success(
+        workerNode,
+        "Worker node retrieved successfully with live Kubernetes data"
+      )
+    );
   } catch (error) {
-    logger.error("Error in getWorkerNodeByIdController:", error);
+    logger.error("Error in getWorkerNodeById controller:", error);
     res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
@@ -146,21 +133,19 @@ const getWorkerNodeByIdController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const syncClusterStateController = async (req, res) => {
+const syncClusterState = async (req, res) => {
   try {
-    const result = await syncClusterState();
+    const result = await workerService.syncClusterState();
 
     logger.info(
       `Admin triggered cluster sync - ${result.stats.syncedNodes} nodes synchronized`
     );
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(
-        responseUtil.success(result, "Cluster state synchronized successfully")
-      );
+    res.json(
+      responseUtil.success(result, "Cluster state synchronized successfully")
+    );
   } catch (error) {
-    logger.error("Error in syncClusterStateController:", error);
+    logger.error("Error in syncClusterState controller:", error);
     res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
@@ -178,22 +163,20 @@ const syncClusterStateController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const getClusterStatsController = async (req, res) => {
+const getClusterStats = async (req, res) => {
   try {
-    const stats = await getClusterStats();
+    const stats = await workerService.getClusterStats();
 
     logger.info("Admin retrieved real-time cluster statistics");
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(
-        responseUtil.success(
-          stats,
-          "Real-time cluster statistics retrieved successfully"
-        )
-      );
+    res.json(
+      responseUtil.success(
+        stats,
+        "Real-time cluster statistics retrieved successfully"
+      )
+    );
   } catch (error) {
-    logger.error("Error in getClusterStatsController:", error);
+    logger.error("Error in getClusterStats controller:", error);
     res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
@@ -211,24 +194,22 @@ const getClusterStatsController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const getOnlineWorkerNodesController = async (req, res) => {
+const getOnlineWorkerNodes = async (req, res) => {
   try {
-    const onlineNodes = await getOnlineWorkerNodes();
+    const onlineNodes = await workerService.getOnlineWorkerNodes();
 
     logger.info(
       `Admin retrieved ${onlineNodes.length} online worker nodes from live cluster`
     );
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(
-        responseUtil.success(
-          { nodes: onlineNodes, count: onlineNodes.length },
-          "Online worker nodes retrieved successfully from live cluster"
-        )
-      );
+    res.json(
+      responseUtil.success(
+        { nodes: onlineNodes, count: onlineNodes.length },
+        "Online worker nodes retrieved successfully from live cluster"
+      )
+    );
   } catch (error) {
-    logger.error("Error in getOnlineWorkerNodesController:", error);
+    logger.error("Error in getOnlineWorkerNodes controller:", error);
     res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
@@ -246,24 +227,22 @@ const getOnlineWorkerNodesController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const getOfflineWorkerNodesController = async (req, res) => {
+const getOfflineWorkerNodes = async (req, res) => {
   try {
-    const offlineNodes = await getOfflineWorkerNodes();
+    const offlineNodes = await workerService.getOfflineWorkerNodes();
 
     logger.info(
       `Admin retrieved ${offlineNodes.length} offline worker nodes from live cluster`
     );
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(
-        responseUtil.success(
-          { nodes: offlineNodes, count: offlineNodes.length },
-          "Offline worker nodes retrieved successfully from live cluster"
-        )
-      );
+    res.json(
+      responseUtil.success(
+        { nodes: offlineNodes, count: offlineNodes.length },
+        "Offline worker nodes retrieved successfully from live cluster"
+      )
+    );
   } catch (error) {
-    logger.error("Error in getOfflineWorkerNodesController:", error);
+    logger.error("Error in getOfflineWorkerNodes controller:", error);
     res
       .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
       .json(
@@ -281,21 +260,19 @@ const getOfflineWorkerNodesController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const cordonNodeController = async (req, res) => {
+const cordonNode = async (req, res) => {
   try {
     const { nodeId } = req.params;
 
-    const updatedNode = await cordonNode(nodeId);
+    const updatedNode = await workerService.cordonNode(nodeId);
 
     logger.info(`Admin cordoned worker node: ${updatedNode.name}`);
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(
-        responseUtil.success(updatedNode, "Worker node cordoned successfully")
-      );
+    res.json(
+      responseUtil.success(updatedNode, "Worker node cordoned successfully")
+    );
   } catch (error) {
-    logger.error("Error in cordonNodeController:", error);
+    logger.error("Error in cordonNode controller:", error);
 
     if (error.message.includes("not found")) {
       return res
@@ -326,21 +303,19 @@ const cordonNodeController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const uncordonNodeController = async (req, res) => {
+const uncordonNode = async (req, res) => {
   try {
     const { nodeId } = req.params;
 
-    const updatedNode = await uncordonNode(nodeId);
+    const updatedNode = await workerService.uncordonNode(nodeId);
 
     logger.info(`Admin uncordoned worker node: ${updatedNode.name}`);
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(
-        responseUtil.success(updatedNode, "Worker node uncordoned successfully")
-      );
+    res.json(
+      responseUtil.success(updatedNode, "Worker node uncordoned successfully")
+    );
   } catch (error) {
-    logger.error("Error in uncordonNodeController:", error);
+    logger.error("Error in uncordonNode controller:", error);
 
     if (error.message.includes("not found")) {
       return res
@@ -371,22 +346,20 @@ const uncordonNodeController = async (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-const drainNodeController = async (req, res) => {
+const drainNode = async (req, res) => {
   try {
     const { nodeId } = req.params;
     const options = req.body || {};
 
-    const result = await drainNode(nodeId, options);
+    const result = await workerService.drainNode(nodeId, options);
 
     logger.info(
       `Admin drained worker node: ${result.node} - ${result.podsEvicted} pods evicted`
     );
 
-    res
-      .status(HTTP_STATUS.OK)
-      .json(responseUtil.success(result, "Worker node drained successfully"));
+    res.json(responseUtil.success(result, "Worker node drained successfully"));
   } catch (error) {
-    logger.error("Error in drainNodeController:", error);
+    logger.error("Error in drainNode controller:", error);
 
     if (error.message.includes("not found")) {
       return res
@@ -413,13 +386,13 @@ const drainNodeController = async (req, res) => {
 };
 
 export {
-  getAllWorkerNodesController,
-  getWorkerNodeByIdController,
-  syncClusterStateController,
-  getClusterStatsController,
-  getOnlineWorkerNodesController,
-  getOfflineWorkerNodesController,
-  cordonNodeController,
-  uncordonNodeController,
-  drainNodeController,
+  getAllWorkerNodes,
+  getWorkerNodeById,
+  syncClusterState,
+  getClusterStats,
+  getOnlineWorkerNodes,
+  getOfflineWorkerNodes,
+  cordonNode,
+  uncordonNode,
+  drainNode,
 };

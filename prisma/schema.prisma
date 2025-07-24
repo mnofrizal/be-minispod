@@ -467,6 +467,8 @@ enum PodStatus {
     FAILED
     SUCCEEDED
     UNKNOWN
+    RESTARTING
+    STOPPED
 }
 
 // New unified transaction enums

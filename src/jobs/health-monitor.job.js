@@ -175,44 +175,33 @@ const cleanupOldRecords = async () => {
 };
 
 /**
- * Update worker node statistics and metrics
+ * Update worker node statistics and metrics using live Kubernetes data
  * @returns {Promise<void>}
  */
 const updateWorkerMetrics = async () => {
   try {
-    // Calculate cluster-wide statistics
-    // Note: totalMemory, totalStorage, allocatedCPU, allocatedMemory, allocatedStorage are String fields
-    // We can only aggregate numeric fields (cpuCores, currentPods, maxPods)
-    const stats = await prisma.workerNode.aggregate({
-      _count: {
-        id: true,
-      },
-      _sum: {
-        cpuCores: true,
-        currentPods: true,
-        maxPods: true,
-      },
-    });
+    // Import worker service for live Kubernetes integration
+    const { getClusterStats } = await import("../services/worker.service.js");
 
-    // Get all worker nodes to manually calculate string field totals
-    const allNodes = await prisma.workerNode.findMany({
-      select: {
-        cpuCores: true,
-        totalMemory: true,
-        totalStorage: true,
-        allocatedCPU: true,
-        allocatedMemory: true,
-        allocatedStorage: true,
-        currentPods: true,
-        maxPods: true,
-        status: true,
-      },
-    });
+    // Get real-time cluster statistics using live Kubernetes data
+    const stats = await getClusterStats();
 
-    const totalNodes = stats._count.id || 0;
-    const totalCPU = stats._sum.cpuCores || 0;
-    const currentPods = stats._sum.currentPods || 0;
-    const maxPods = stats._sum.maxPods || 0;
+    const totalNodes = stats.cluster.totalNodes;
+    const activeNodes = stats.nodeStatus.active;
+    const totalCPU = stats.resources.cpu.total;
+    const allocatedCPU = stats.resources.cpu.allocated;
+    const cpuUtilization = stats.resources.cpu.utilization;
+    const totalMemory = stats.resources.memory.total;
+    const allocatedMemory = stats.resources.memory.allocated;
+    const memoryUtilization = stats.resources.memory.utilization;
+    const maxPods = stats.resources.pods.maxTotal;
+    const currentPods = stats.resources.pods.currentTotal;
+    const podUtilization = stats.resources.pods.utilization;
+
+    // Calculate total storage from live data (if available)
+    let totalStorageGB = 0;
+    let allocatedStorageGB = 0;
+    let storageUtilization = 0;
 
     // Helper function to parse memory/storage strings (e.g., "32Gi", "1Ti", "500Mi")
     const parseResourceString = (resourceStr) => {
@@ -247,44 +236,35 @@ const updateWorkerMetrics = async () => {
       }
     };
 
-    // Calculate totals from string fields
-    let totalMemoryGB = 0;
-    let totalStorageGB = 0;
-    let allocatedCPUCores = 0;
-    let allocatedMemoryGB = 0;
-    let allocatedStorageGB = 0;
-    let activeNodes = 0;
+    // Get storage data from live nodes
+    try {
+      const { getAllWorkerNodes } = await import(
+        "../services/worker.service.js"
+      );
+      const { data: liveNodes } = await getAllWorkerNodes({ limit: 1000 });
 
-    allNodes.forEach((node) => {
-      if (node.status === "ACTIVE") {
-        activeNodes++;
-      }
+      liveNodes.forEach((node) => {
+        totalStorageGB += parseResourceString(node.totalStorage);
+      });
 
-      totalMemoryGB += parseResourceString(node.totalMemory);
-      totalStorageGB += parseResourceString(node.totalStorage);
-      allocatedCPUCores += parseFloat(node.allocatedCPU || 0);
-      allocatedMemoryGB += parseResourceString(node.allocatedMemory);
-      allocatedStorageGB += parseResourceString(node.allocatedStorage);
-    });
-
-    // Calculate utilization percentages
-    const cpuUtilization =
-      totalCPU > 0 ? ((allocatedCPUCores / totalCPU) * 100).toFixed(2) : 0;
-    const memoryUtilization =
-      totalMemoryGB > 0
-        ? ((allocatedMemoryGB / totalMemoryGB) * 100).toFixed(2)
-        : 0;
-    const storageUtilization =
-      totalStorageGB > 0
-        ? ((allocatedStorageGB / totalStorageGB) * 100).toFixed(2)
-        : 0;
-    const podUtilization =
-      maxPods > 0 ? ((currentPods / maxPods) * 100).toFixed(2) : 0;
+      // Note: Kubernetes doesn't track ephemeral storage allocation like CPU/memory
+      // Storage allocation would need to be calculated from PVCs and pod storage requests
+      // For now, we'll show total storage capacity only
+      allocatedStorageGB = 0; // Placeholder - would need PVC calculation
+      storageUtilization = 0; // Placeholder - would need PVC calculation
+    } catch (storageError) {
+      logger.debug(
+        "Could not get storage metrics from live data:",
+        storageError.message
+      );
+    }
 
     logger.info(
       `Cluster metrics updated - Total Nodes: ${totalNodes}, Active Nodes: ${activeNodes}, ` +
-        `CPU: ${allocatedCPUCores}/${totalCPU} cores (${cpuUtilization}%), ` +
-        `Memory: ${allocatedMemoryGB.toFixed(1)}/${totalMemoryGB.toFixed(
+        `CPU: ${allocatedCPU.toFixed(
+          1
+        )}/${totalCPU} cores (${cpuUtilization}%), ` +
+        `Memory: ${allocatedMemory.toFixed(1)}/${totalMemory.toFixed(
           1
         )} GB (${memoryUtilization}%), ` +
         `Storage: ${allocatedStorageGB.toFixed(1)}/${totalStorageGB.toFixed(
@@ -294,7 +274,7 @@ const updateWorkerMetrics = async () => {
     );
 
     // Here you could store these metrics in a separate metrics table for historical tracking
-    // For now, we just log them
+    // For now, we just log them with live Kubernetes data
   } catch (error) {
     logger.error("Metrics update job failed:", error);
     throw error;

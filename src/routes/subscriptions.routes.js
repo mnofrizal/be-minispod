@@ -1,6 +1,6 @@
 import express from "express";
 import { authenticate, adminOnly } from "../middleware/auth.middleware.js";
-import { subscriptionController } from "../controllers/subscription.controller.js";
+import * as subscriptionController from "../controllers/subscription.controller.js";
 import {
   validateSubscription,
   validateSubscriptionQuery,

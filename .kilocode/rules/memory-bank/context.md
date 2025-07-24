@@ -48,14 +48,16 @@ src/
 │   ├── error.middleware.js      # Global error handling
 │   └── billing.middleware.js    # Balance validation and payment security
 ├── routes/
+│   ├── index.routes.js         # Main route file with centralized route management
 │   ├── auth.routes.js          # Authentication endpoints
-│   ├── users.routes.js         # User management with validation
 │   ├── services.routes.js      # Service catalog with validation
-│   ├── workers.routes.js       # Worker node management with Kubernetes integration
 │   ├── billing.routes.js       # Billing system endpoints
-│   ├── admin-billing.routes.js # Admin billing management endpoints
 │   ├── subscriptions.routes.js # Subscription management with credit-based flow
-│   └── pods.routes.js          # Pod management endpoints with Kubernetes operations
+│   └── admin/                  # Admin-only endpoints with proper security boundaries
+│       ├── users.routes.js     # Admin user management with validation
+│       ├── workers.routes.js   # Admin worker node management with Kubernetes integration
+│       ├── billing.routes.js   # Admin billing management endpoints
+│       └── pods.routes.js      # Admin pod management endpoints with Kubernetes operations
 ├── services/
 │   ├── auth.service.js         # Authentication business logic
 │   ├── user.service.js         # User management business logic
@@ -107,13 +109,14 @@ prisma/
 
 rest/
 ├── auth.rest                   # Authentication API testing
-├── user.rest                   # User management API testing
 ├── service.rest                # Service catalog API testing
-├── worker.rest                 # Worker node management API testing
 ├── billing.rest                # Billing system API testing
-├── admin-billing.rest          # Admin billing management API testing
 ├── subscription.rest           # Subscription management API testing
-└── pod.rest                    # Pod management API testing
+├── pod.rest                    # Admin pod management API testing
+├── worker.rest                 # Admin worker node management API testing
+├── admin-billing.rest          # Admin billing management API testing
+├── admin-users.rest            # Admin user management API testing
+└── admin-routes.rest           # Admin route testing overview
 
 monitoring/
 ├── prometheus.yml              # Prometheus configuration for metrics collection
@@ -158,12 +161,15 @@ monitoring/
 
 **Pod Management System:**
 
-- **Complete Pod Lifecycle**: Create, delete, restart, monitor, and manage Kubernetes pods
+- **Complete Pod Lifecycle**: Create, delete, restart, stop, start, monitor, and manage Kubernetes pods
 - **Service Templates Integration**: Automatic pod configuration using service templates (N8N, Ghost, WordPress)
 - **Namespace Management**: Customer isolation with dedicated namespaces
 - **Resource Management**: CPU, memory, and storage allocation with configurable limits
 - **Health Monitoring**: Real-time pod status tracking with automatic notifications
 - **Log Management**: Pod log retrieval with filtering and pagination
+- **Stop/Start Functionality**: Kubernetes deployment scaling for pod lifecycle management
+- **Local Development Access**: Port forwarding commands for development environment access
+- **Container Port Management**: Proper container port configuration and consistency across all services
 
 **Service Templates System:**
 
@@ -382,8 +388,76 @@ monitoring/
 29. **Resource Management**: Automated cleanup of deployments, services, ingresses with safe confirmation-based operations
 30. **Production Maintenance**: Advanced admin tools for system maintenance and resource optimization
 31. **Redis Configuration Standardization**: Cleaned up and standardized Redis environment variables for Bull queue system
+32. **Route Architecture Reorganization**: Centralized route management with proper admin/user endpoint separation
+33. **Pod Management Architecture**: Standardized controller patterns with individual function exports following auth controller design
+34. **Container Port Configuration**: Fixed critical container port issues ensuring proper pod deployment and local access
+35. **Pod Lifecycle Enhancement**: Added stop/start functionality with proper Kubernetes deployment scaling
+36. **Development Environment Integration**: Enhanced local access information with correct port forwarding commands
+37. **Database Schema Evolution**: Added RESTARTING and STOPPED pod statuses with proper Prisma migrations
 
 ## Recent Updates (2025-07-24)
+
+### Route Architecture Reorganization
+
+**Major Architectural Improvement**: Reorganized route structure to separate user-facing and admin-only endpoints with proper security boundaries.
+
+**Changes Made**:
+
+1. **Created Centralized Route Management**:
+
+   - **[`src/routes/index.routes.js`](src/routes/index.routes.js)**: Main route file that imports and mounts all routes
+   - **User Routes**: Mounted at `/api/v1/` for customer-facing endpoints
+   - **Admin Routes**: Mounted at `/api/v1/admin/` for administrative endpoints
+
+2. **Admin Route Separation**:
+
+   - **[`src/routes/admin/`](src/routes/admin/)**: New admin folder structure
+   - **[`src/routes/admin/pods.routes.js`](src/routes/admin/pods.routes.js)**: Admin-only pod management
+   - **[`src/routes/admin/users.routes.js`](src/routes/admin/users.routes.js)**: Admin user management
+   - **[`src/routes/admin/workers.routes.js`](src/routes/admin/workers.routes.js)**: Admin worker management
+   - **[`src/routes/admin/billing.routes.js`](src/routes/admin/billing.routes.js)**: Admin billing management
+
+3. **Removed User-Facing Pod Endpoints**: Pod management is now admin-only; users access pods through subscription endpoints
+
+### Pod Management Architecture Improvements
+
+**Controller Pattern Standardization**: Refactored pod controller to follow proper architecture patterns like auth controller.
+
+**Changes Made**:
+
+1. **Controller Refactoring**:
+
+   - **[`src/controllers/pod.controller.js`](src/controllers/pod.controller.js)**: Converted from object methods to individual exported functions
+   - **Individual Function Exports**: `getAllPods`, `getPodById`, `restartPod`, `stopPod`, `startPod`, `deletePod`, `getOrphanedPods`, `cleanupOrphanedPods`, `debugKubernetesState`
+   - **Proper Service Layer Calls**: Each controller function calls corresponding service functions
+
+2. **Service Layer Enhancement**:
+
+   - **[`src/services/pod.service.js`](src/services/pod.service.js)**: Enhanced with individual function exports
+   - **Stop/Start Functionality**: Added `stopPod` and `startPod` functions using Kubernetes deployment scaling
+   - **Enhanced Restart**: `restartPod` now handles stopped pods (0 replicas) properly
+   - **Local Access Information**: Added development environment port forwarding commands
+
+3. **Database Schema Updates**:
+   - **New Pod Statuses**: Added `RESTARTING` and `STOPPED` to PodStatus enum
+   - **Prisma Migration**: Applied database migration for new statuses
+
+### Container Port Configuration Fix
+
+**Critical Bug Fix**: Resolved container port configuration issues that were breaking pod deployment.
+
+**Issues Resolved**:
+
+1. **Missing Container Port in getAllPods**: Fixed missing `containerPort` field selection causing incorrect local access information
+2. **Broken Pod Deployment**: Fixed `createDeployment` function parameter passing for container ports
+3. **Consistent Port Usage**: Ensured all pod management functions use correct container ports from service catalog
+
+**Technical Details**:
+
+- **N8N**: Port 5678 (correctly configured)
+- **Ghost**: Port 2368 (correctly configured)
+- **WordPress**: Port 80 (correctly configured)
+- **Local Access**: Development environment shows correct `kubectl port-forward` commands
 
 ### Redis Configuration Fix
 
@@ -397,7 +471,6 @@ monitoring/
    - `BULL_REDIS_HOST`, `BULL_REDIS_PORT`, `BULL_REDIS_PASSWORD`, `BULL_REDIS_DB` (not used by any code)
 
 2. **Added correct Redis variables** to `.env`:
-
    ```bash
    # Redis Configuration for Bull Queues
    REDIS_HOST="100.90.149.26"
@@ -405,8 +478,6 @@ monitoring/
    REDIS_PASSWORD=""
    REDIS_DB=0
    ```
-
-3. **Updated Memory Bank**: Updated `tech.md` and `context.md` to reflect the current Redis configuration and document the Bull queue system properly.
 
 **Result**: The Bull queue system now successfully connects to Redis using the correct environment variables. The configuration is clean, consistent, and free of unused variables.
 

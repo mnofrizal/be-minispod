@@ -1,9 +1,6 @@
-### Worker Node Management API Tests
-### Kubernetes-Integrated Worker Management
-### All endpoints provide real-time cluster data
-
 @baseUrl = http://localhost:3000/api/v1
-@adminToken = {{login_response.response.body.data.tokens.accessToken}}
+@authToken = {{login_response.response.body.data.tokens.accessToken}}
+@nodeId = {{get_all_response.response.body.data.workers[0].id}}
 
 ### Login to get access token
 # @name login_response
@@ -14,76 +11,53 @@ Content-Type: application/json
   "email": "admin@paas.com",
   "password": "Admin123!@#"
 }
-### =============================================================================
-### CLUSTER MANAGEMENT
-### =============================================================================
 
 ### Sync cluster state with database
-POST {{baseUrl}}/workers/sync
-Authorization: Bearer {{adminToken}}
+POST {{baseUrl}}/admin/workers/sync
+Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
-### Get real-time cluster statistics
-GET {{baseUrl}}/workers/stats
-Authorization: Bearer {{adminToken}}
 
-### =============================================================================
-### WORKER NODE QUERIES (Real-time Kubernetes data)
-### =============================================================================
+### Admin - Get all worker nodes
+# @name get_all_response
+GET {{baseUrl}}/admin/workers
+Authorization: Bearer {{authToken}}
 
-### Get all worker nodes with live Kubernetes data
-GET {{baseUrl}}/workers
-Authorization: Bearer {{adminToken}}
+### Admin - Get all worker nodes with filters
+GET {{baseUrl}}/admin/workers?page=1&limit=10&status=ACTIVE&isReady=true
+Authorization: Bearer {{authToken}}
 
-### Get all worker nodes with pagination
-GET {{baseUrl}}/workers?page=1&limit=5
-Authorization: Bearer {{adminToken}}
+### Admin - Get cluster statistics
+GET {{baseUrl}}/admin/workers/stats
+Authorization: Bearer {{authToken}}
 
-### Get worker nodes with filters
-GET {{baseUrl}}/workers?status=ACTIVE&isReady=true&isSchedulable=true
-Authorization: Bearer {{adminToken}}
+### Admin - Get online worker nodes
+GET {{baseUrl}}/admin/workers/online
+Authorization: Bearer {{authToken}}
 
-### Search worker nodes
-GET {{baseUrl}}/workers?search=worker&sortBy=name&sortOrder=asc
-Authorization: Bearer {{adminToken}}
+### Admin - Get offline worker nodes
+GET {{baseUrl}}/admin/workers/offline
+Authorization: Bearer {{authToken}}
 
-### Get online worker nodes (from live cluster)
-GET {{baseUrl}}/workers/online
-Authorization: Bearer {{adminToken}}
+### Admin - Sync cluster state
+POST {{baseUrl}}/admin/workers/sync
+Authorization: Bearer {{authToken}}
 
-### Get offline worker nodes (from live cluster)
-GET {{baseUrl}}/workers/offline
-Authorization: Bearer {{adminToken}}
+### Admin - Get worker node details
+GET {{baseUrl}}/admin/workers/{{nodeId}}
+Authorization: Bearer {{authToken}}
 
-### =============================================================================
-### INDIVIDUAL WORKER NODE OPERATIONS
-### =============================================================================
+### Admin - Cordon worker node
+POST {{baseUrl}}/admin/workers/{{nodeId}}/cordon
+Authorization: Bearer {{authToken}}
 
-### Get worker node by ID with live Kubernetes data
-GET {{baseUrl}}/workers/cmdg67pz
-Authorization: Bearer {{adminToken}}
+### Admin - Uncordon worker node
+POST {{baseUrl}}/admin/workers/{{nodeId}}/uncordon
+Authorization: Bearer {{authToken}}
 
-### Get worker node by name with live Kubernetes data
-GET {{baseUrl}}/workers/i6700
-Authorization: Bearer {{adminToken}}
-
-### =============================================================================
-### KUBERNETES NODE OPERATIONS
-### =============================================================================
-
-### Cordon node (make unschedulable)
-POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/cordon
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-### Uncordon node (make schedulable)
-POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/uncordon
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-### Drain node (evict all pods)
-POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/drain
-Authorization: Bearer {{adminToken}}
+### Admin - Drain worker node
+POST {{baseUrl}}/admin/workers/{{nodeId}}/drain
+Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
 {
@@ -92,130 +66,3 @@ Content-Type: application/json
   "force": false,
   "deleteLocalData": false
 }
-
-### Drain node with force (for testing)
-POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/drain
-Authorization: Bearer {{adminToken}}
-Content-Type: application/json
-
-{
-  "gracePeriodSeconds": 10,
-  "timeout": 120,
-  "force": true,
-  "deleteLocalData": true
-}
-
-### =============================================================================
-### TESTING SCENARIOS
-### =============================================================================
-
-### Test 1: Full cluster sync and stats
-POST {{baseUrl}}/workers/sync
-Authorization: Bearer {{adminToken}}
-
-###
-GET {{baseUrl}}/workers/stats
-Authorization: Bearer {{adminToken}}
-
-### Test 2: Node management workflow
-# 1. Get all nodes
-GET {{baseUrl}}/workers
-Authorization: Bearer {{adminToken}}
-
-###
-# 2. Get specific node details
-GET {{baseUrl}}/workers/i6700
-Authorization: Bearer {{adminToken}}
-
-###
-# 3. Cordon the node
-POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/cordon
-Authorization: Bearer {{adminToken}}
-
-###
-# 4. Check online/offline status
-GET {{baseUrl}}/workers/online
-Authorization: Bearer {{adminToken}}
-
-###
-GET {{baseUrl}}/workers/offline
-Authorization: Bearer {{adminToken}}
-
-###
-# 5. Uncordon the node
-POST {{baseUrl}}/workers/k3d-paas-cluster-agent-0/uncordon
-Authorization: Bearer {{adminToken}}
-
-### Test 3: Search and filter functionality
-GET {{baseUrl}}/workers?search=agent&isSchedulable=true
-Authorization: Bearer {{adminToken}}
-
-###
-GET {{baseUrl}}/workers?status=ACTIVE&sortBy=name&sortOrder=desc
-Authorization: Bearer {{adminToken}}
-
-### Test 4: Real-time data validation
-# Get live cluster data
-GET {{baseUrl}}/workers
-Authorization: Bearer {{adminToken}}
-
-###
-# Sync cluster state
-POST {{baseUrl}}/workers/sync
-Authorization: Bearer {{adminToken}}
-
-###
-# Verify data is updated
-GET {{baseUrl}}/workers/stats
-Authorization: Bearer {{adminToken}}
-
-### =============================================================================
-### ERROR TESTING
-### =============================================================================
-
-### Test non-existent node
-GET {{baseUrl}}/workers/non-existent-node
-Authorization: Bearer {{adminToken}}
-
-### Test cordon non-existent node
-POST {{baseUrl}}/workers/non-existent-node/cordon
-Authorization: Bearer {{adminToken}}
-
-### Test without authentication
-GET {{baseUrl}}/workers
-
-### Test with invalid token
-GET {{baseUrl}}/workers
-Authorization: Bearer invalid-token
-
-### =============================================================================
-### PERFORMANCE TESTING
-### =============================================================================
-
-### Large page size test
-GET {{baseUrl}}/workers?limit=100
-Authorization: Bearer {{adminToken}}
-
-### Complex filter test
-GET {{baseUrl}}/workers?status=ACTIVE&isReady=true&isSchedulable=true&search=k3d&sortBy=cpuCores&sortOrder=desc
-Authorization: Bearer {{adminToken}}
-
-### =============================================================================
-### NOTES
-### =============================================================================
-
-# This API now provides:
-# 1. Real-time Kubernetes cluster data
-# 2. Automatic database synchronization
-# 3. Live node status and resource information
-# 4. Kubernetes node operations (cordon/uncordon/drain)
-# 5. No manual node creation/deletion (managed by K8s)
-# 6. Enhanced filtering and search capabilities
-# 7. Production-ready cluster management
-
-# Key differences from legacy API:
-# - All data is live from Kubernetes cluster
-# - No manual CRUD operations on nodes
-# - Kubernetes-native operations (cordon/drain)
-# - Real-time resource allocation tracking
-# - Automatic node discovery and sync

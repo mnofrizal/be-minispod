@@ -1,0 +1,67 @@
+### Admin Routes Testing
+### Test the reorganized admin route structure
+
+@baseUrl = http://localhost:3000/api/v1
+@adminToken = your-admin-jwt-token-here
+
+### Test Admin User Routes
+GET {{baseUrl}}/admin/users
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Worker Routes  
+GET {{baseUrl}}/admin/workers
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Pod Routes
+GET {{baseUrl}}/admin/pods
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Pod Stats
+GET {{baseUrl}}/admin/pods/stats
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Pod Debug
+GET {{baseUrl}}/admin/pods/debug
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Pod Orphaned Detection
+GET {{baseUrl}}/admin/pods/orphaned
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Billing Routes
+GET {{baseUrl}}/admin/billing/transactions
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Billing Statistics
+GET {{baseUrl}}/admin/billing/statistics
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Billing Users
+GET {{baseUrl}}/admin/billing/users
+Authorization: Bearer {{adminToken}}
+
+### Test Admin Billing Health
+GET {{baseUrl}}/admin/billing/health
+Authorization: Bearer {{adminToken}}
+
+### Verify No Double Prefixes
+# These should work (correct paths):
+GET {{baseUrl}}/admin/pods/stats
+Authorization: Bearer {{adminToken}}
+
+# These should NOT exist (would be double prefixes):
+GET {{baseUrl}}/admin/pods/admin/stats
+Authorization: Bearer {{adminToken}}
+
+### Test User Routes (Non-Admin)
+GET {{baseUrl}}/auth/profile
+Authorization: Bearer {{adminToken}}
+
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+GET {{baseUrl}}/subscriptions
+Authorization: Bearer {{adminToken}}
+
+GET {{baseUrl}}/billing/balance
+Authorization: Bearer {{adminToken}}

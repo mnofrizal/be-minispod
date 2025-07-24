@@ -13,15 +13,8 @@ import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { initializeKubernetes } from "./config/kubernetes.js";
 import jobScheduler from "./jobs/job-scheduler.js";
 
-// Import routes
-import authRoutes from "./routes/auth.routes.js";
-import userRoutes from "./routes/users.routes.js";
-import serviceRoutes from "./routes/services.routes.js";
-import workerRoutes from "./routes/workers.routes.js";
-import subscriptionRoutes from "./routes/subscriptions.routes.js";
-import podRoutes from "./routes/pods.routes.js";
-import billingRoutes from "./routes/billing.routes.js";
-import adminBillingRoutes from "./routes/admin-billing.routes.js";
+// Import centralized routes
+import apiRoutes from "./routes/index.routes.js";
 
 dotenv.config();
 
@@ -76,15 +69,8 @@ app.get("/health", (req, res) => {
   );
 });
 
-// API routes
-app.use(`/api/${API_VERSION}/auth`, authRoutes);
-app.use(`/api/${API_VERSION}/users`, userRoutes);
-app.use(`/api/${API_VERSION}/services`, serviceRoutes);
-app.use(`/api/${API_VERSION}/workers`, workerRoutes);
-app.use(`/api/${API_VERSION}/subscriptions`, subscriptionRoutes);
-app.use(`/api/${API_VERSION}/pods`, podRoutes);
-app.use(`/api/${API_VERSION}/billing`, billingRoutes);
-app.use(`/api/${API_VERSION}/admin/billing`, adminBillingRoutes);
+// API routes - centralized through index.routes.js
+app.use(`/api/${API_VERSION}`, apiRoutes);
 
 // 404 handler
 app.use("*", (req, res) => {

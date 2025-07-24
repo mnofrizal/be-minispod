@@ -1,5 +1,5 @@
-import { subscriptionService } from "../services/subscription.service.js";
-import { podService } from "../services/pod.service.js";
+import { expireSubscriptions } from "../services/subscription.service.js";
+import { createPod } from "../services/pod.service.js";
 import { templateParser } from "../templates/template.parser.js";
 import { prisma } from "../config/database.js";
 import queueManager from "./queue.manager.js";
@@ -94,7 +94,7 @@ export const subscriptionJobs = {
     try {
       logger.info("Starting subscription expiry check");
 
-      const expiredCount = await subscriptionService.expireSubscriptions();
+      const expiredCount = await expireSubscriptions();
 
       if (expiredCount > 0) {
         // Schedule cleanup for expired subscriptions
@@ -306,10 +306,7 @@ export const subscriptionJobs = {
       );
 
       // Create pod
-      const serviceInstance = await podService.createPod(
-        subscription.id,
-        serviceConfig
-      );
+      const serviceInstance = await createPod(subscription.id, serviceConfig);
 
       // Update subscription status
       await prisma.subscription.update({
