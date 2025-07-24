@@ -3,8 +3,8 @@
 ## Project Status
 
 **Phase**: Phase 2 COMPLETE - Full Kubernetes Integration with Production-Ready PaaS Platform + Admin Pod Management
-**Last Updated**: 2025-07-23
-**Current Focus**: Phase 2 has been successfully completed with comprehensive Kubernetes integration, pod management, subscription lifecycle, email notifications, and production-ready worker management. Additionally, a complete admin pod management system with orphaned pod cleanup functionality has been implemented and verified working in production. The system now provides complete PaaS functionality with automated pod provisioning, real-time monitoring, user notifications, and advanced admin maintenance capabilities.
+**Last Updated**: 2025-07-24
+**Current Focus**: Phase 2 has been successfully completed with comprehensive Kubernetes integration, pod management, subscription lifecycle, email notifications, and production-ready worker management. Additionally, a complete admin pod management system with orphaned pod cleanup functionality has been implemented and verified working in production. Redis configuration has been standardized and cleaned up to use consistent environment variables. The system now provides complete PaaS functionality with automated pod provisioning, real-time monitoring, user notifications, and advanced admin maintenance capabilities.
 
 ## Current State
 
@@ -377,6 +377,34 @@ monitoring/
 28. **Debug & Troubleshooting**: Comprehensive Kubernetes cluster state analysis and debugging tools
 29. **Resource Management**: Automated cleanup of deployments, services, ingresses with safe confirmation-based operations
 30. **Production Maintenance**: Advanced admin tools for system maintenance and resource optimization
+31. **Redis Configuration Standardization**: Cleaned up and standardized Redis environment variables for Bull queue system
+
+## Recent Updates (2025-07-24)
+
+### Redis Configuration Fix
+
+**Issue Resolved**: The [`queue.manager.js`](src/jobs/queue.manager.js) was looking for `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, and `REDIS_DB` environment variables, but the `.env` file contained unused `BULL_REDIS_*` variables instead.
+
+**Changes Made**:
+
+1. **Removed unused variables** from `.env`:
+
+   - `REDIS_URL="redis://100.90.149.26:6379"` (not used by any code)
+   - `BULL_REDIS_HOST`, `BULL_REDIS_PORT`, `BULL_REDIS_PASSWORD`, `BULL_REDIS_DB` (not used by any code)
+
+2. **Added correct Redis variables** to `.env`:
+
+   ```bash
+   # Redis Configuration for Bull Queues
+   REDIS_HOST="100.90.149.26"
+   REDIS_PORT=6379
+   REDIS_PASSWORD=""
+   REDIS_DB=0
+   ```
+
+3. **Updated Memory Bank**: Updated `tech.md` and `context.md` to reflect the current Redis configuration and document the Bull queue system properly.
+
+**Result**: The Bull queue system now successfully connects to Redis using the correct environment variables. The configuration is clean, consistent, and free of unused variables.
 
 ## Current Blockers
 

@@ -33,6 +33,27 @@
 - **node-cron**: Task scheduler for Node.js
 - **Redis**: Queue storage and job persistence
 
+#### Redis Configuration
+
+Redis serves as the backbone for the Bull job queue system. The application uses a single Redis instance for all queue operations:
+
+- **Connection**: Direct host/port configuration (not URL-based)
+- **Queue Storage**: All Bull queues use the same Redis database
+- **Job Persistence**: Jobs survive application restarts through Redis persistence
+- **Queue Types**: Multiple specialized queues for different job categories
+
+#### Bull Queue System
+
+The application implements multiple Bull queues for different job types:
+
+- **`subscription-jobs`**: Subscription lifecycle management and processing
+- **`pod-jobs`**: Kubernetes pod operations and monitoring
+- **`notification-jobs`**: Email and webhook notification delivery
+- **`billing-jobs`**: Payment processing and billing automation
+- **`cleanup-jobs`**: Resource cleanup and maintenance tasks
+
+Each queue has specific configuration for retry logic, concurrency, and job retention policies.
+
 ### Validation & Middleware
 
 - **joi**: Object schema validation
@@ -135,7 +156,8 @@ API_VERSION=v1
 
 # Database Configuration
 DATABASE_URL="postgresql://username:password@localhost:5432/paas_db"
-REDIS_URL="redis://localhost:6379"
+
+# Redis Configuration for Bull Queues
 REDIS_HOST="localhost"
 REDIS_PORT=6379
 REDIS_PASSWORD=""
@@ -467,11 +489,20 @@ spec:
                 secretKeyRef:
                   name: paas-secrets
                   key: database-url
-            - name: REDIS_URL
+            - name: REDIS_HOST
               valueFrom:
                 secretKeyRef:
                   name: paas-secrets
-                  key: redis-url
+                  key: redis-host
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: paas-secrets
+                  key: redis-password
+            - name: REDIS_DB
+              value: "0"
 ```
 
 ## Performance Considerations
