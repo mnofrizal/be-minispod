@@ -16,7 +16,7 @@ The backend is designed as a **microservices-oriented monolith** using Express.j
 - **Admin User Management**: Complete CRUD operations for user administration
 - **Service Catalog Management**: Full service catalog system with public and admin endpoints
 - **Production-Ready Worker Management**: Advanced Kubernetes worker node monitoring with auto-registration, realtime heartbeats, and proper architectural patterns
-- **Credit-Based Billing System**: Complete billing system with Midtrans integration, unified transactions, and CUID validation
+- **Credit-Based Billing System**: Complete billing system with Midtrans integration, unified transactions, CUID validation, and admin billing management
 - **Database Layer**: PostgreSQL with Prisma ORM, centralized configuration
 - **Security Middleware**: Password hashing, JWT validation, rate limiting
 - **Role System**: Simplified USER and ADMINISTRATOR roles with constants
