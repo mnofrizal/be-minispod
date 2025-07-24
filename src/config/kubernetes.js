@@ -7,11 +7,13 @@ import logger from "../utils/logger.util.js";
  */
 class KubernetesConfig {
   constructor() {
+    this.kubernetesEnabled = process.env.KUBERNETES_ENABLED === "true";
     this.kc = new k8s.KubeConfig();
     this.coreV1Api = null;
     this.appsV1Api = null;
     this.networkingV1Api = null;
     this.isConnected = false;
+    this.mockMode = !this.kubernetesEnabled;
   }
 
   /**
@@ -19,6 +21,14 @@ class KubernetesConfig {
    */
   async initialize() {
     try {
+      if (this.mockMode) {
+        logger.warn(
+          "⚠️  Kubernetes client running in mock mode (Kubernetes disabled)"
+        );
+        this.isConnected = false;
+        return true;
+      }
+
       // Load kubeconfig from default locations or environment
       if (process.env.KUBECONFIG_PATH) {
         this.kc.loadFromFile(process.env.KUBECONFIG_PATH);

@@ -1,0 +1,119 @@
+### Admin Billing Management API Testing
+### Base URL: http://localhost:3000/api/v1/admin/billing
+### Authentication: Bearer token required (ADMINISTRATOR role)
+
+@baseUrl = http://localhost:3000/api/v1
+@adminToken = {{login_response.response.body.data.tokens.accessToken}}
+
+### Login to get access token
+# @name login_response
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+### 1. Get All Transactions (Admin)
+GET {{baseUrl}}/admin/billing/transactions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 2. Get All Transactions with Filters (Admin)
+GET {{baseUrl}}/admin/billing/transactions?page=1&limit=20&type=TOPUP&status=SUCCESS&startDate=2024-01-01&endDate=2024-12-31
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 3. Get Transaction Details (Admin) - Any User's Transaction
+GET {{baseUrl}}/admin/billing/transactions/cm3abc123def456ghi789jkl
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 4. Get Billing Statistics (Admin Dashboard)
+GET {{baseUrl}}/admin/billing/statistics
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 5. Get All Users with Billing Information
+GET {{baseUrl}}/admin/billing/users
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 6. Get All Users with Billing Information (Paginated)
+GET {{baseUrl}}/admin/billing/users?page=1&limit=10
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 7. Get Specific User's Billing Overview
+GET {{baseUrl}}/admin/billing/users/cm3user123def456ghi789abc
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 8. Adjust User Balance (Credit)
+POST {{baseUrl}}/admin/billing/users/cm3user123def456ghi789abc/adjust-balance
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "amount": 50000,
+  "type": "CREDIT",
+  "description": "Manual balance adjustment - customer support credit"
+}
+
+### 9. Adjust User Balance (Debit)
+POST {{baseUrl}}/admin/billing/users/cm3user123def456ghi789abc/adjust-balance
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "amount": 25000,
+  "type": "DEBIT",
+  "description": "Manual balance adjustment - refund processing fee"
+}
+
+### 10. Test Invalid User ID
+GET {{baseUrl}}/admin/billing/users/invalid-user-id
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+### 11. Test Invalid Balance Adjustment (Negative Amount)
+POST {{baseUrl}}/admin/billing/users/cm3user123def456ghi789abc/adjust-balance
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "amount": -10000,
+  "type": "CREDIT",
+  "description": "This should fail validation"
+}
+
+### 12. Test Invalid Balance Adjustment (Invalid Type)
+POST {{baseUrl}}/admin/billing/users/cm3user123def456ghi789abc/adjust-balance
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "amount": 10000,
+  "type": "INVALID_TYPE",
+  "description": "This should fail validation"
+}
+
+### 13. Test Unauthorized Access (No Token)
+GET {{baseUrl}}/admin/billing/transactions
+Content-Type: application/json
+
+### 14. Test Unauthorized Access (User Token - Not Admin)
+@userToken = your-user-jwt-token-here
+GET {{baseUrl}}/admin/billing/transactions
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+### Notes:
+### - Replace {{adminToken}} with actual admin JWT token
+### - Replace user IDs with actual CUID format IDs from your database
+### - All admin endpoints require ADMINISTRATOR role
+### - Balance adjustments create audit trail entries
+### - Amounts are in IDR (Indonesian Rupiah)
+### - Minimum adjustment: IDR 1,000
+### - Maximum adjustment: IDR 100,000,000

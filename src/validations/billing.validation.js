@@ -1,5 +1,8 @@
 import Joi from "joi";
 
+// Helper function to validate CUID format
+const cuidPattern = /^c[a-z0-9]{24}$/;
+
 // Top-up validation
 export const createTopUpValidation = Joi.object({
   amount: Joi.number()
@@ -88,5 +91,41 @@ export const transactionIdValidation = Joi.object({
     "string.min": "Transaction ID must be at least 20 characters",
     "string.max": "Transaction ID must be at most 30 characters",
     "any.required": "Transaction ID is required",
+  }),
+});
+
+/**
+ * Admin-specific validation schemas
+ */
+
+// User ID validation for admin operations
+export const userIdValidation = Joi.object({
+  userId: Joi.string().pattern(cuidPattern).required().messages({
+    "string.pattern.base": "User ID must be a valid CUID format",
+    "any.required": "User ID is required",
+  }),
+});
+
+// Balance adjustment validation for admin operations
+export const balanceAdjustmentValidation = Joi.object({
+  amount: Joi.number()
+    .positive()
+    .min(1000) // Minimum IDR 1,000
+    .max(100000000) // Maximum IDR 100,000,000
+    .required()
+    .messages({
+      "number.positive": "Amount must be a positive number",
+      "number.min": "Minimum adjustment amount is IDR 1,000",
+      "number.max": "Maximum adjustment amount is IDR 100,000,000",
+      "any.required": "Amount is required",
+    }),
+  type: Joi.string().valid("CREDIT", "DEBIT").required().messages({
+    "any.only": "Type must be either CREDIT or DEBIT",
+    "any.required": "Adjustment type is required",
+  }),
+  description: Joi.string().min(5).max(200).required().messages({
+    "string.min": "Description must be at least 5 characters long",
+    "string.max": "Description cannot exceed 200 characters",
+    "any.required": "Description is required for balance adjustments",
   }),
 });

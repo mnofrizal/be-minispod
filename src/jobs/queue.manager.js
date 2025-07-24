@@ -7,6 +7,7 @@ import logger from "../utils/logger.util.js";
 class QueueManager {
   constructor() {
     this.queues = new Map();
+    this.redisEnabled = process.env.REDIS_ENABLED === "true";
     this.redisConfig = {
       host: process.env.REDIS_HOST || "localhost",
       port: process.env.REDIS_PORT || 6379,
@@ -14,6 +15,7 @@ class QueueManager {
       db: process.env.REDIS_DB || 0,
     };
     this.isInitialized = false;
+    this.mockMode = !this.redisEnabled;
   }
 
   /**
@@ -21,6 +23,12 @@ class QueueManager {
    */
   async initialize() {
     try {
+      if (this.mockMode) {
+        logger.warn("⚠️  Queue manager running in mock mode (Redis disabled)");
+        this.isInitialized = true;
+        return true;
+      }
+
       // Create queues for different job types
       await this.createQueue("subscription-jobs", {
         defaultJobOptions: {
@@ -155,6 +163,11 @@ class QueueManager {
    */
   async addJob(queueName, jobName, data, options = {}) {
     try {
+      if (this.mockMode) {
+        logger.info(`Mock: Would add job ${jobName} to queue ${queueName}`);
+        return { id: `mock-${Date.now()}`, name: jobName, data };
+      }
+
       const queue = this.getQueue(queueName);
       const job = await queue.add(jobName, data, {
         priority: options.priority || 0,

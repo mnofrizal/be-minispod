@@ -1062,4 +1062,387 @@ export const transactionService = {
       throw error;
     }
   },
+
+  /**
+   * Get all transactions across all users (Admin only)
+   */
+  async getAllTransactions({
+    page = 1,
+    limit = 20,
+    type = null,
+    status = null,
+    userId = null,
+    startDate = null,
+    endDate = null,
+  }) {
+    try {
+      const skip = (page - 1) * limit;
+      const where = {
+        ...(type && { type }),
+        ...(status && { status }),
+        ...(userId && { userId }),
+        ...(startDate &&
+          endDate && {
+            createdAt: {
+              gte: new Date(startDate),
+              lte: new Date(endDate),
+            },
+          }),
+      };
+
+      const [transactions, total] = await Promise.all([
+        prisma.transaction.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+          include: {
+            user: {
+              select: { id: true, name: true, email: true },
+            },
+            invoice: {
+              select: { id: true, invoiceNumber: true, status: true },
+            },
+          },
+        }),
+        prisma.transaction.count({ where }),
+      ]);
+
+      // Format transactions for admin display
+      const formattedTransactions = transactions.map((transaction) => ({
+        id: transaction.id,
+        date: transaction.createdAt,
+        type: transaction.type,
+        description: transaction.description,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        status: transaction.status,
+        reference: transaction.referenceId,
+        referenceType: transaction.referenceType,
+        paymentMethod: transaction.paymentMethod,
+        paymentGateway: transaction.paymentGateway,
+        invoice: transaction.invoice,
+        user: transaction.user,
+        actions: {
+          canPay:
+            transaction.status === "PENDING" && transaction.type === "TOPUP",
+          canCancel: transaction.status === "PENDING",
+          canDownloadInvoice:
+            transaction.invoice && transaction.invoice.status === "PAID",
+          canRefund:
+            transaction.status === "SUCCESS" &&
+            transaction.type === "SERVICE_PURCHASE",
+        },
+      }));
+
+      return {
+        transactions: formattedTransactions,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      logger.error("Error getting all transactions (admin):", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get transaction details by ID (Admin - any user's transaction)
+   */
+  async getTransactionDetailsAdmin(transactionId) {
+    try {
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: transactionId },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
+          invoice: true,
+        },
+      });
+
+      if (!transaction) {
+        throw new Error("Transaction not found");
+      }
+
+      return transaction;
+    } catch (error) {
+      logger.error(
+        `Error getting transaction details (admin) ${transactionId}:`,
+        error
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Get billing statistics for admin dashboard
+   */
+  async getBillingStatistics({ startDate = null, endDate = null }) {
+    try {
+      const dateFilter =
+        startDate && endDate
+          ? {
+              createdAt: {
+                gte: new Date(startDate),
+                lte: new Date(endDate),
+              },
+            }
+          : {};
+
+      // Get transaction counts by type and status
+      const [
+        totalTransactions,
+        topUpTransactions,
+        servicePurchases,
+        pendingTransactions,
+        successfulTransactions,
+        failedTransactions,
+        totalRevenue,
+        totalTopUps,
+        totalSpending,
+      ] = await Promise.all([
+        prisma.transaction.count({ where: dateFilter }),
+        prisma.transaction.count({
+          where: { ...dateFilter, type: "TOPUP" },
+        }),
+        prisma.transaction.count({
+          where: { ...dateFilter, type: "SERVICE_PURCHASE" },
+        }),
+        prisma.transaction.count({
+          where: { ...dateFilter, status: "PENDING" },
+        }),
+        prisma.transaction.count({
+          where: { ...dateFilter, status: "SUCCESS" },
+        }),
+        prisma.transaction.count({
+          where: { ...dateFilter, status: "FAILED" },
+        }),
+        prisma.transaction.aggregate({
+          where: { ...dateFilter, status: "SUCCESS" },
+          _sum: { amount: true },
+        }),
+        prisma.transaction.aggregate({
+          where: { ...dateFilter, type: "TOPUP", status: "SUCCESS" },
+          _sum: { amount: true },
+        }),
+        prisma.transaction.aggregate({
+          where: { ...dateFilter, type: "SERVICE_PURCHASE", status: "SUCCESS" },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      // Get user statistics
+      const [totalUsers, activeUsers] = await Promise.all([
+        prisma.user.count(),
+        prisma.user.count({
+          where: {
+            transactions: {
+              some: dateFilter,
+            },
+          },
+        }),
+      ]);
+
+      return {
+        period: { startDate, endDate },
+        transactions: {
+          total: totalTransactions,
+          topUps: topUpTransactions,
+          servicePurchases: servicePurchases,
+          pending: pendingTransactions,
+          successful: successfulTransactions,
+          failed: failedTransactions,
+        },
+        revenue: {
+          total: totalRevenue._sum.amount || 0,
+          topUps: totalTopUps._sum.amount || 0,
+          servicePurchases: totalSpending._sum.amount || 0,
+        },
+        users: {
+          total: totalUsers,
+          active: activeUsers,
+        },
+      };
+    } catch (error) {
+      logger.error("Error getting billing statistics:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get all users with billing information
+   */
+  async getAllUsersBilling({ page = 1, limit = 20, search = null }) {
+    try {
+      const skip = (page - 1) * limit;
+      const where = search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {};
+
+      const [users, total] = await Promise.all([
+        prisma.user.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+          include: {
+            balance: true,
+            transactions: {
+              take: 5,
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                type: true,
+                amount: true,
+                status: true,
+                createdAt: true,
+              },
+            },
+            _count: {
+              select: {
+                transactions: true,
+                subscriptions: true,
+              },
+            },
+          },
+        }),
+        prisma.user.count({ where }),
+      ]);
+
+      // Format users with billing summary
+      const formattedUsers = users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        balance: {
+          current: user.balance?.balance || 0,
+          currency: user.balance?.currency || "IDR",
+        },
+        statistics: {
+          totalTransactions: user._count.transactions,
+          totalSubscriptions: user._count.subscriptions,
+        },
+        recentTransactions: user.transactions,
+      }));
+
+      return {
+        users: formattedUsers,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      logger.error("Error getting all users billing:", error);
+      throw error;
+    }
+  },
+};
+
+/**
+ * Extended Balance Service for Admin Functions
+ */
+export const adminBalanceService = {
+  /**
+   * Manual balance adjustment (Admin only)
+   */
+  async adjustBalance(userId, amount, type, description, adminId) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // Get current balance
+        const currentBalance = await tx.userBalance.findUnique({
+          where: { userId },
+        });
+
+        if (!currentBalance) {
+          throw new Error("User balance not found");
+        }
+
+        const balanceBefore = currentBalance.balance;
+        let balanceAfter;
+
+        // Calculate new balance based on adjustment type
+        if (type === "CREDIT") {
+          balanceAfter = balanceBefore.add(Math.abs(amount));
+        } else if (type === "DEBIT") {
+          balanceAfter = balanceBefore.sub(Math.abs(amount));
+
+          // Check if balance would go negative
+          if (balanceAfter.lt(0)) {
+            throw new Error(
+              `Insufficient balance for debit. Current: ${balanceBefore}, Debit: ${Math.abs(
+                amount
+              )}`
+            );
+          }
+        } else {
+          throw new Error("Invalid adjustment type. Must be CREDIT or DEBIT");
+        }
+
+        // Update balance
+        const updatedBalance = await tx.userBalance.update({
+          where: { userId },
+          data: { balance: balanceAfter },
+        });
+
+        // Create balance transaction record
+        const balanceTransaction = await tx.balanceTransaction.create({
+          data: {
+            userId,
+            type: type.toUpperCase(),
+            amount: Math.abs(amount),
+            balanceBefore,
+            balanceAfter,
+            description: `${description} (Admin adjustment by ${adminId})`,
+          },
+        });
+
+        // Create unified transaction record
+        const unifiedTransaction = await tx.transaction.create({
+          data: {
+            userId,
+            type: "ADJUSTMENT",
+            status: "SUCCESS",
+            description: `Balance ${type.toLowerCase()}: ${description}`,
+            amount: Math.abs(amount),
+            currency: "IDR",
+            referenceId: balanceTransaction.id,
+            referenceType: "BALANCE_ADJUSTMENT",
+            paymentGateway: "MANUAL",
+            paymentMethod: "ADMIN_ADJUSTMENT",
+          },
+        });
+
+        logger.info(
+          `Admin ${adminId} adjusted balance for user ${userId}: ${type} ${amount}. New balance: ${balanceAfter}`
+        );
+
+        return {
+          balance: updatedBalance,
+          balanceBefore,
+          balanceAfter,
+          transaction: balanceTransaction,
+          unifiedTransaction,
+        };
+      });
+    } catch (error) {
+      logger.error(`Error adjusting balance for user ${userId}:`, error);
+      throw error;
+    }
+  },
 };

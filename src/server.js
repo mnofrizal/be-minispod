@@ -21,6 +21,7 @@ import workerRoutes from "./routes/workers.routes.js";
 import subscriptionRoutes from "./routes/subscriptions.routes.js";
 import podRoutes from "./routes/pods.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
+import adminBillingRoutes from "./routes/admin-billing.routes.js";
 
 dotenv.config();
 
@@ -83,6 +84,7 @@ app.use(`/api/${API_VERSION}/workers`, workerRoutes);
 app.use(`/api/${API_VERSION}/subscriptions`, subscriptionRoutes);
 app.use(`/api/${API_VERSION}/pods`, podRoutes);
 app.use(`/api/${API_VERSION}/billing`, billingRoutes);
+app.use(`/api/${API_VERSION}/admin/billing`, adminBillingRoutes);
 
 // 404 handler
 app.use("*", (req, res) => {

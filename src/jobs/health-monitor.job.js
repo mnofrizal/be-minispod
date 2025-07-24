@@ -13,8 +13,10 @@ import logger from "../utils/logger.util.js";
 const checkWorkerNodeHealth = async () => {
   try {
     const now = new Date();
-    const heartbeatThreshold = 5 * 60 * 1000; // 5 minutes in milliseconds
-    const healthCheckThreshold = 10 * 60 * 1000; // 10 minutes in milliseconds
+    const heartbeatThreshold =
+      (parseInt(process.env.WORKER_HEARTBEAT_TIMEOUT_MINUTES) || 5) * 60 * 1000; // configurable minutes in milliseconds
+    const healthCheckThreshold =
+      (parseInt(process.env.WORKER_INACTIVE_TIMEOUT_MINUTES) || 10) * 60 * 1000; // configurable minutes in milliseconds
 
     // Find nodes that haven't sent heartbeat in the last 5 minutes
     const staleNodes = await prisma.workerNode.findMany({

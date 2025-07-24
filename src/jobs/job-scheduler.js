@@ -21,6 +21,7 @@ class JobScheduler {
     this.jobs = new Map();
     this.isRunning = false;
     this.queueInitialized = false;
+    this.backgroundJobsEnabled = process.env.BACKGROUND_JOBS_ENABLED === "true";
   }
 
   /**
@@ -62,14 +63,21 @@ class JobScheduler {
       return;
     }
 
+    if (!this.backgroundJobsEnabled) {
+      logger.warn(
+        "⚠️  Background jobs are disabled - job scheduler will not start"
+      );
+      return;
+    }
+
     logger.info("Starting job scheduler...");
 
     try {
       // Initialize Bull queue system
       await this.initializeQueues();
-      // Health monitoring job - every 2 minutes
+      // Health monitoring job - configurable interval
       const healthCheckJob = cron.schedule(
-        "*/2 * * * *",
+        process.env.HEALTH_CHECK_INTERVAL || "*/2 * * * *",
         async () => {
           try {
             logger.debug("Running worker node health check...");
@@ -84,9 +92,9 @@ class JobScheduler {
         }
       );
 
-      // Metrics update job - every 5 minutes
+      // Metrics update job - configurable interval
       const metricsJob = cron.schedule(
-        "*/5 * * * *",
+        process.env.METRICS_COLLECTION_INTERVAL || "*/5 * * * *",
         async () => {
           try {
             logger.debug("Updating worker metrics...");
@@ -101,9 +109,9 @@ class JobScheduler {
         }
       );
 
-      // Cleanup job - daily at 2:00 AM
+      // Cleanup job - configurable schedule
       const cleanupJob = cron.schedule(
-        "0 2 * * *",
+        process.env.CLEANUP_INTERVAL || "0 2 * * *",
         async () => {
           try {
             logger.info("Running daily cleanup job...");
@@ -136,9 +144,21 @@ class JobScheduler {
 
       logger.info("Job scheduler started successfully");
       logger.info("Scheduled jobs:");
-      logger.info("  - Worker health check: every 2 minutes");
-      logger.info("  - Worker metrics update: every 5 minutes");
-      logger.info("  - Daily cleanup: 2:00 AM (Asia/Jakarta)");
+      logger.info(
+        `  - Worker health check: ${
+          process.env.HEALTH_CHECK_INTERVAL || "*/2 * * * *"
+        }`
+      );
+      logger.info(
+        `  - Worker metrics update: ${
+          process.env.METRICS_COLLECTION_INTERVAL || "*/5 * * * *"
+        }`
+      );
+      logger.info(
+        `  - Daily cleanup: ${
+          process.env.CLEANUP_INTERVAL || "0 2 * * *"
+        } (Asia/Jakarta)`
+      );
       logger.info(
         "  - Billing jobs: expire top-ups, sync payments, generate reports"
       );
