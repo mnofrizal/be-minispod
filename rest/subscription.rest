@@ -1,7 +1,7 @@
 ### Subscription API Testing
 
 @baseUrl = http://localhost:3000/api/v1
-@authToken = Bearer {{login_response.response.body.data.tokens.accessToken}}
+@authToken = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRneWk4M3AwMDA2OXlhaDA4c3NnaDRyIiwiZW1haWwiOiJjdXN0b21lckB0ZXN0LmNvbSIsInJvbGUiOiJVU0VSIiwiaWF0IjoxNzUzNDEwMzc5LCJleHAiOjE3NTM0OTY3NzksImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.0dhcqiGGsVjrAdbf2iQyfVSwpQ7FrvSiz8-VQy4dJvw
 ### Login to get access token
 # @name login_response
 POST {{baseUrl}}/auth/login

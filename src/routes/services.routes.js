@@ -1,5 +1,5 @@
 import express from "express";
-import { adminOnly } from "../middleware/auth.middleware.js";
+import { adminOnly, authenticate } from "../middleware/auth.middleware.js";
 import * as serviceController from "../controllers/service.controller.js";
 import {
   validate,
@@ -15,19 +15,20 @@ const router = express.Router();
 
 /**
  * @route   GET /api/v1/services
- * @desc    Get active services for public catalog
- * @access  Public
+ * @desc    Get active services for authenticated users
+ * @access  Private (Authenticated users only)
  */
-router.get("/", serviceController.getActiveServices);
+router.get("/", authenticate, serviceController.getActiveServices);
 
 /**
  * @route   GET /api/v1/services/grouped
  * @desc    Get grouped services (for frontend - one card per service with variants)
- * @access  Public
+ * @access  Private (Authenticated users only)
  * @query   search, category
  */
 router.get(
   "/grouped",
+  authenticate,
   validate(getGroupedServicesQuerySchema, "query"),
   serviceController.getGroupedServices
 );
@@ -35,9 +36,9 @@ router.get(
 /**
  * @route   GET /api/v1/services/categories
  * @desc    Get service categories
- * @access  Public
+ * @access  Private (Authenticated users only)
  */
-router.get("/categories", serviceController.getServiceCategories);
+router.get("/categories", authenticate, serviceController.getServiceCategories);
 
 /**
  * @route   GET /api/v1/services/admin
@@ -74,21 +75,23 @@ router.get(
 /**
  * @route   GET /api/v1/services/:name/variants
  * @desc    Get all variants for a specific service
- * @access  Public
+ * @access  Private (Authenticated users only)
  */
 router.get(
   "/:name/variants",
+  authenticate,
   validate(serviceNameSchema, "params"),
   serviceController.getServiceVariants
 );
 
 /**
  * @route   GET /api/v1/services/:name
- * @desc    Get service by name (public endpoint)
- * @access  Public
+ * @desc    Get service by name
+ * @access  Private (Authenticated users only)
  */
 router.get(
   "/:name",
+  authenticate,
   validate(serviceNameSchema, "params"),
   serviceController.getServiceByName
 );

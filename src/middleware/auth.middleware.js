@@ -16,7 +16,11 @@ const authenticate = async (req, res, next) => {
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res
         .status(401)
-        .json(responseUtil.authError("Access token required"));
+        .json(
+          responseUtil.authError(
+            "Authentication required. Please provide a valid access token."
+          )
+        );
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
@@ -24,11 +28,10 @@ const authenticate = async (req, res, next) => {
     // Verify token
     const decoded = verifyAccessToken(token);
 
-    // Get user from database
+    // Get user from database (without isActive filter first)
     const user = await prisma.user.findUnique({
       where: {
         id: decoded.userId,
-        isActive: true,
       },
       select: {
         id: true,
@@ -43,7 +46,20 @@ const authenticate = async (req, res, next) => {
     if (!user) {
       return res
         .status(401)
-        .json(responseUtil.authError("Invalid token - user not found"));
+        .json(
+          responseUtil.authError("Authentication failed. Please login again.")
+        );
+    }
+
+    // Check if user account is active
+    if (!user.isActive) {
+      return res
+        .status(401)
+        .json(
+          responseUtil.authError(
+            "Account is inactive. Please contact administrator."
+          )
+        );
     }
 
     // Attach user to request
@@ -55,11 +71,23 @@ const authenticate = async (req, res, next) => {
     logger.error("Authentication error:", error);
 
     if (error.name === "JsonWebTokenError") {
-      return res.status(401).json(responseUtil.authError("Invalid token"));
+      return res
+        .status(401)
+        .json(
+          responseUtil.authError(
+            "Invalid authentication token. Please login again."
+          )
+        );
     }
 
     if (error.name === "TokenExpiredError") {
-      return res.status(401).json(responseUtil.authError("Token expired"));
+      return res
+        .status(401)
+        .json(
+          responseUtil.authError(
+            "Authentication token has expired. Please login again."
+          )
+        );
     }
 
     return res.status(500).json(responseUtil.error("Authentication failed"));
@@ -75,7 +103,11 @@ const authorize = (allowedRoles = []) => {
     if (!req.user) {
       return res
         .status(401)
-        .json(responseUtil.authError("Authentication required"));
+        .json(
+          responseUtil.authError(
+            "Authentication required. Please login to access this resource."
+          )
+        );
     }
 
     if (allowedRoles.length === 0) {
@@ -110,7 +142,6 @@ const optionalAuth = async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: {
         id: decoded.userId,
-        isActive: true,
       },
       select: {
         id: true,
@@ -122,7 +153,8 @@ const optionalAuth = async (req, res, next) => {
       },
     });
 
-    if (user) {
+    // Only attach user if they exist and are active
+    if (user && user.isActive) {
       req.user = user;
       req.userId = user.id;
     }

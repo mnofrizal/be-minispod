@@ -21,7 +21,7 @@ Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 ### 2. Get All Transactions with Filters (Admin)
-GET {{baseUrl}}/admin/billing/transactions?page=1&limit=20&type=TOPUP&status=SUCCESS&startDate=2024-01-01&endDate=2024-12-31
+GET {{baseUrl}}/admin/billing/transactions?page=1&limit=20&type=TOPUP
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
