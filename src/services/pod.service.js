@@ -274,15 +274,42 @@ export const getPodStatus = async (serviceInstanceId) => {
       restartCount: pod.status.containerStatuses?.[0]?.restartCount || 0,
     }));
 
-    // Determine overall status
+    // Determine overall status with proper startup handling
     let overallStatus = "PENDING";
+
     if (replicas === 0) {
       // Pod is intentionally stopped (scaled to 0)
       overallStatus = "STOPPED";
     } else if (availableReplicas > 0 && readyReplicas === replicas) {
+      // All replicas are ready and available
       overallStatus = "RUNNING";
-    } else if (availableReplicas === 0 && replicas > 0) {
-      overallStatus = "FAILED";
+    } else if (replicas > 0) {
+      // Pod is desired but not fully ready yet
+      // Check individual pod phases to determine if it's actually failing
+      const failedPods = podStatuses.filter(
+        (pod) =>
+          pod.phase === "Failed" ||
+          (pod.phase === "Running" && !pod.ready && pod.restartCount > 2)
+      );
+
+      const pendingPods = podStatuses.filter(
+        (pod) => pod.phase === "Pending" || pod.phase === "ContainerCreating"
+      );
+
+      const runningButNotReady = podStatuses.filter(
+        (pod) => pod.phase === "Running" && !pod.ready && pod.restartCount <= 2
+      );
+
+      if (failedPods.length > 0) {
+        // Only mark as FAILED if pods are actually in Failed phase or repeatedly restarting
+        overallStatus = "FAILED";
+      } else if (pendingPods.length > 0 || runningButNotReady.length > 0) {
+        // Pod is starting up normally - keep as PENDING
+        overallStatus = "PENDING";
+      } else {
+        // Fallback to PENDING for any other startup scenarios
+        overallStatus = "PENDING";
+      }
     }
 
     return {
@@ -630,7 +657,7 @@ export const monitorPodStatus = async (
         const status = await getPodStatus(serviceInstanceId);
         const previousStatus = await prisma.serviceInstance.findUnique({
           where: { id: serviceInstanceId },
-          select: { status: true },
+          select: { status: true, subscriptionId: true },
         });
 
         await prisma.serviceInstance.update({
@@ -638,11 +665,34 @@ export const monitorPodStatus = async (
           data: { status: status.status },
         });
 
-        // Send notification when pod becomes ready
+        // Update subscription status when pod becomes ready
         if (
           status.status === "RUNNING" &&
           previousStatus?.status !== "RUNNING"
         ) {
+          try {
+            // Import subscription service to update subscription status
+            const { updateSubscriptionStatusFromPod } = await import(
+              "./subscription.service.js"
+            );
+
+            await updateSubscriptionStatusFromPod(
+              previousStatus.subscriptionId,
+              status.status,
+              { serviceInstanceId, podName, namespace }
+            );
+
+            logger.info(
+              `Updated subscription status for pod ${serviceInstanceId} becoming RUNNING`
+            );
+          } catch (subscriptionError) {
+            logger.error(
+              `Failed to update subscription status for ${serviceInstanceId}:`,
+              subscriptionError
+            );
+          }
+
+          // Send notification when pod becomes ready
           try {
             await notificationJobs.queueServiceReady(serviceInstanceId);
           } catch (notificationError) {
@@ -1065,7 +1115,7 @@ export const getAllPods = async (options) => {
       prisma.serviceInstance.count({ where: whereClause }),
     ]);
 
-    // Get real-time status for each pod and sync database status
+    // Get real-time status and metrics for each pod and sync database status
     const podsWithStatus = await Promise.all(
       serviceInstances.map(async (instance) => {
         try {
@@ -1093,6 +1143,85 @@ export const getAllPods = async (options) => {
               logger.error(
                 `Failed to sync status for pod ${instance.id}:`,
                 syncError
+              );
+            }
+          }
+
+          // Get pod metrics and worker node information if pod is running
+          let podMetrics = null;
+          let metricsData = null;
+          let workerNodeInfo = null;
+          if (
+            status.status === "RUNNING" &&
+            status.pods &&
+            status.pods.length > 0
+          ) {
+            try {
+              const runningPod = status.pods[0];
+              podMetrics = await getPodMetrics(
+                runningPod.name,
+                instance.namespace
+              );
+
+              // Get detailed pod information including worker node
+              const k8sConfig = getKubernetesConfig();
+              const coreV1Api = k8sConfig.getCoreV1Api();
+              const podResponse = await coreV1Api.readNamespacedPod(
+                runningPod.name,
+                instance.namespace
+              );
+              const podSpec = podResponse.body.spec;
+              const podStatus = podResponse.body.status;
+
+              // Extract worker node information
+              if (podSpec.nodeName) {
+                workerNodeInfo = {
+                  nodeName: podSpec.nodeName,
+                  nodeIP: podStatus.hostIP || null,
+                  podIP: podStatus.podIP || null,
+                  phase: podStatus.phase || null,
+                };
+
+                // Get additional node details if available
+                try {
+                  const nodeResponse = await coreV1Api.readNode(
+                    podSpec.nodeName
+                  );
+                  const nodeData = nodeResponse.body;
+                  const nodeAddresses = nodeData.status?.addresses || [];
+                  const nodeInfo = nodeData.status?.nodeInfo || {};
+
+                  workerNodeInfo = {
+                    ...workerNodeInfo,
+                    nodeLabels: nodeData.metadata?.labels || {},
+                    nodeArchitecture: nodeInfo.architecture || null,
+                    nodeOS: nodeInfo.operatingSystem || null,
+                    kubeletVersion: nodeInfo.kubeletVersion || null,
+                    nodeInternalIP:
+                      nodeAddresses.find((addr) => addr.type === "InternalIP")
+                        ?.address || null,
+                    nodeExternalIP:
+                      nodeAddresses.find((addr) => addr.type === "ExternalIP")
+                        ?.address || null,
+                    nodeHostname:
+                      nodeAddresses.find((addr) => addr.type === "Hostname")
+                        ?.address || podSpec.nodeName,
+                  };
+                } catch (nodeError) {
+                  logger.warn(
+                    `Failed to get node details for ${podSpec.nodeName}:`,
+                    nodeError.message
+                  );
+                }
+              }
+
+              if (podMetrics) {
+                metricsData = parsePodMetrics(podMetrics, podSpec);
+              }
+            } catch (metricsError) {
+              logger.warn(
+                `Failed to get metrics for pod ${instance.id}:`,
+                metricsError.message
               );
             }
           }
@@ -1129,6 +1258,35 @@ export const getAllPods = async (options) => {
           return {
             ...instance,
             realTimeStatus: status,
+            ...(workerNodeInfo && {
+              workerNode: workerNodeInfo,
+            }),
+            ...(metricsData && {
+              metrics: {
+                cpuUtilization: metricsData.cpuUtilization,
+                memoryUtilization: metricsData.memoryUtilization,
+                cpuUsage: metricsData.cpuUsage,
+                memoryUsage: metricsData.memoryUsage,
+                cpuRequests: metricsData.cpuRequests,
+                memoryRequests: metricsData.memoryRequests,
+                containerMetrics: metricsData.containerMetrics,
+                metricsTimestamp: metricsData.timestamp,
+                metricsAvailable: true,
+              },
+            }),
+            ...(!metricsData && {
+              metrics: {
+                cpuUtilization: null,
+                memoryUtilization: null,
+                cpuUsage: null,
+                memoryUsage: null,
+                cpuRequests: null,
+                memoryRequests: null,
+                containerMetrics: [],
+                metricsTimestamp: null,
+                metricsAvailable: false,
+              },
+            }),
             ...(localAccess && { localAccess }),
           };
         } catch (error) {
@@ -1165,6 +1323,17 @@ export const getAllPods = async (options) => {
           return {
             ...instance,
             realTimeStatus: { status: "UNKNOWN", message: error.message },
+            metrics: {
+              cpuUtilization: null,
+              memoryUtilization: null,
+              cpuUsage: null,
+              memoryUsage: null,
+              cpuRequests: null,
+              memoryRequests: null,
+              containerMetrics: [],
+              metricsTimestamp: null,
+              metricsAvailable: false,
+            },
             ...(localAccess && { localAccess }),
           };
         }
@@ -1484,6 +1653,83 @@ export const getAdminPodDetails = async (serviceInstanceId) => {
     // Get real-time pod status
     const realTimeStatus = await getPodStatus(serviceInstanceId);
 
+    // Get pod metrics and worker node information if pod is running
+    let podMetrics = null;
+    let metricsData = null;
+    let workerNodeInfo = null;
+    if (
+      realTimeStatus.status === "RUNNING" &&
+      realTimeStatus.pods &&
+      realTimeStatus.pods.length > 0
+    ) {
+      try {
+        const runningPod = realTimeStatus.pods[0];
+        podMetrics = await getPodMetrics(
+          runningPod.name,
+          serviceInstance.namespace
+        );
+
+        // Get detailed pod information including worker node
+        const k8sConfig = getKubernetesConfig();
+        const coreV1Api = k8sConfig.getCoreV1Api();
+        const podResponse = await coreV1Api.readNamespacedPod(
+          runningPod.name,
+          serviceInstance.namespace
+        );
+        const podSpec = podResponse.body.spec;
+        const podStatus = podResponse.body.status;
+
+        // Extract worker node information
+        if (podSpec.nodeName) {
+          workerNodeInfo = {
+            nodeName: podSpec.nodeName,
+            nodeIP: podStatus.hostIP || null,
+            podIP: podStatus.podIP || null,
+            phase: podStatus.phase || null,
+          };
+
+          // Get additional node details if available
+          try {
+            const nodeResponse = await coreV1Api.readNode(podSpec.nodeName);
+            const nodeData = nodeResponse.body;
+            const nodeAddresses = nodeData.status?.addresses || [];
+            const nodeInfo = nodeData.status?.nodeInfo || {};
+
+            workerNodeInfo = {
+              ...workerNodeInfo,
+              nodeLabels: nodeData.metadata?.labels || {},
+              nodeArchitecture: nodeInfo.architecture || null,
+              nodeOS: nodeInfo.operatingSystem || null,
+              kubeletVersion: nodeInfo.kubeletVersion || null,
+              nodeInternalIP:
+                nodeAddresses.find((addr) => addr.type === "InternalIP")
+                  ?.address || null,
+              nodeExternalIP:
+                nodeAddresses.find((addr) => addr.type === "ExternalIP")
+                  ?.address || null,
+              nodeHostname:
+                nodeAddresses.find((addr) => addr.type === "Hostname")
+                  ?.address || podSpec.nodeName,
+            };
+          } catch (nodeError) {
+            logger.warn(
+              `Failed to get node details for ${podSpec.nodeName}:`,
+              nodeError.message
+            );
+          }
+        }
+
+        if (podMetrics) {
+          metricsData = parsePodMetrics(podMetrics, podSpec);
+        }
+      } catch (metricsError) {
+        logger.warn(
+          `Failed to get metrics for pod ${serviceInstanceId}:`,
+          metricsError.message
+        );
+      }
+    }
+
     // Parse deployment configuration
     let deploymentConfig = {};
     try {
@@ -1546,6 +1792,35 @@ export const getAdminPodDetails = async (serviceInstanceId) => {
       customConfig,
       resourceLimits,
       usageMetrics: serviceInstance.subscription.usageMetrics || [],
+      ...(workerNodeInfo && {
+        workerNode: workerNodeInfo,
+      }),
+      ...(metricsData && {
+        metrics: {
+          cpuUtilization: metricsData.cpuUtilization,
+          memoryUtilization: metricsData.memoryUtilization,
+          cpuUsage: metricsData.cpuUsage,
+          memoryUsage: metricsData.memoryUsage,
+          cpuRequests: metricsData.cpuRequests,
+          memoryRequests: metricsData.memoryRequests,
+          containerMetrics: metricsData.containerMetrics,
+          metricsTimestamp: metricsData.timestamp,
+          metricsAvailable: true,
+        },
+      }),
+      ...(!metricsData && {
+        metrics: {
+          cpuUtilization: null,
+          memoryUtilization: null,
+          cpuUsage: null,
+          memoryUsage: null,
+          cpuRequests: null,
+          memoryRequests: null,
+          containerMetrics: [],
+          metricsTimestamp: null,
+          metricsAvailable: false,
+        },
+      }),
       adminInfo: {
         owner: serviceInstance.subscription.user,
         subscription: {
@@ -1630,9 +1905,22 @@ export const adminPodAction = async (serviceInstanceId, action) => {
         };
         break;
 
+      case "reset":
+        const resetResult = await resetPod(serviceInstanceId);
+        result = {
+          action: "reset",
+          message: "Pod reset completed successfully",
+          timestamp: new Date(),
+          resetDetails: {
+            resetCount: resetResult.resetCount,
+            newPodName: resetResult.podName,
+          },
+        };
+        break;
+
       default:
         throw new Error(
-          "Invalid action. Supported actions: restart, stop, start, delete"
+          "Invalid action. Supported actions: restart, stop, start, delete, reset"
         );
     }
 
@@ -2066,6 +2354,790 @@ export const debugKubernetesState = async () => {
     return debugInfo;
   } catch (error) {
     logger.error("Error debugging Kubernetes state:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get pod metrics from Kubernetes metrics API
+ * @param {string} podName - Pod name
+ * @param {string} namespace - Pod namespace
+ * @returns {Promise<Object|null>} Pod metrics or null
+ */
+export const getPodMetrics = async (podName, namespace) => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      logger.warn("Kubernetes client not ready, skipping pod metrics");
+      return null;
+    }
+
+    // Try to get metrics API client
+    let metricsApi;
+    try {
+      metricsApi = k8sConfig.getMetricsV1beta1Api();
+    } catch (error) {
+      logger.warn(
+        "Metrics API not available, skipping pod metrics:",
+        error.message
+      );
+      return null;
+    }
+
+    // Fetch pod metrics using CustomObjectsApi (pods are namespaced resources)
+    const response = await metricsApi.getNamespacedCustomObject(
+      "metrics.k8s.io",
+      "v1beta1",
+      namespace,
+      "pods",
+      podName
+    );
+    return response.body;
+  } catch (error) {
+    if (error.response?.statusCode === 404) {
+      logger.warn(
+        `Pod metrics not found for ${namespace}/${podName} - metrics server may not be installed`
+      );
+      return null;
+    }
+    logger.warn(
+      `Error getting pod metrics for ${namespace}/${podName}:`,
+      error.message
+    );
+    return null;
+  }
+};
+
+/**
+ * Get all pod metrics from Kubernetes metrics API for a specific namespace
+ * @param {string} namespace - Namespace to get pod metrics from
+ * @returns {Promise<Array>} Array of pod metrics
+ */
+export const getAllPodMetrics = async (namespace) => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      logger.warn("Kubernetes client not ready, skipping pod metrics");
+      return [];
+    }
+
+    // Try to get metrics API client
+    let metricsApi;
+    try {
+      metricsApi = k8sConfig.getMetricsV1beta1Api();
+    } catch (error) {
+      logger.warn(
+        "Metrics API not available, skipping pod metrics:",
+        error.message
+      );
+      return [];
+    }
+
+    // Fetch all pod metrics for the namespace using CustomObjectsApi
+    const response = await metricsApi.listNamespacedCustomObject(
+      "metrics.k8s.io",
+      "v1beta1",
+      namespace,
+      "pods"
+    );
+    return response.body.items || [];
+  } catch (error) {
+    logger.warn(
+      `Error getting all pod metrics for namespace ${namespace}:`,
+      error.message
+    );
+    return [];
+  }
+};
+
+/**
+ * Get pod metrics for all namespaces
+ * @returns {Promise<Array>} Array of pod metrics from all namespaces
+ */
+export const getAllPodMetricsAllNamespaces = async () => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      logger.warn("Kubernetes client not ready, skipping pod metrics");
+      return [];
+    }
+
+    // Try to get metrics API client
+    let metricsApi;
+    try {
+      metricsApi = k8sConfig.getMetricsV1beta1Api();
+    } catch (error) {
+      logger.warn(
+        "Metrics API not available, skipping pod metrics:",
+        error.message
+      );
+      return [];
+    }
+
+    // Fetch all pod metrics across all namespaces using CustomObjectsApi
+    const response = await metricsApi.listClusterCustomObject(
+      "metrics.k8s.io",
+      "v1beta1",
+      "pods"
+    );
+    return response.body.items || [];
+  } catch (error) {
+    logger.warn(
+      "Error getting all pod metrics for all namespaces:",
+      error.message
+    );
+    return [];
+  }
+};
+
+/**
+ * Parse pod metrics to extract CPU and memory utilization
+ * @param {Object} podMetrics - Pod metrics from Kubernetes API
+ * @param {Object} podSpec - Pod spec with resource requests/limits
+ * @returns {Object} Parsed utilization data
+ */
+export const parsePodMetrics = (podMetrics, podSpec) => {
+  if (!podMetrics || !podMetrics.containers) {
+    return {
+      cpuUtilization: null,
+      memoryUtilization: null,
+      cpuUsage: null,
+      memoryUsage: null,
+      containerMetrics: [],
+    };
+  }
+
+  const containers = podMetrics.containers || [];
+  const containerMetrics = [];
+  let totalCpuUsage = 0;
+  let totalMemoryUsage = 0;
+  let totalCpuRequests = 0;
+  let totalMemoryRequests = 0;
+
+  // Process each container's metrics
+  for (const container of containers) {
+    const usage = container.usage || {};
+
+    // Parse CPU usage (from nanocores to cores)
+    const cpuUsageNano = parseInt(usage.cpu?.replace("n", "") || "0");
+    const cpuUsageCores = cpuUsageNano / 1000000000; // Convert nanocores to cores
+
+    // Parse memory usage (from bytes to MB)
+    const memoryUsageBytes =
+      parseInt(usage.memory?.replace("Ki", "") || "0") * 1024; // Ki to bytes
+    const memoryUsageMB = memoryUsageBytes / (1024 * 1024); // Bytes to MB
+
+    totalCpuUsage += cpuUsageCores;
+    totalMemoryUsage += memoryUsageMB;
+
+    // Find container spec for resource requests
+    const containerSpec = podSpec?.containers?.find(
+      (c) => c.name === container.name
+    );
+    const resources = containerSpec?.resources || {};
+    const requests = resources.requests || {};
+
+    // Parse resource requests
+    let cpuRequest = 0;
+    let memoryRequest = 0;
+
+    if (requests.cpu) {
+      if (requests.cpu.endsWith("m")) {
+        cpuRequest = parseFloat(requests.cpu.replace("m", "")) / 1000; // millicores to cores
+      } else {
+        cpuRequest = parseFloat(requests.cpu);
+      }
+    }
+
+    if (requests.memory) {
+      if (requests.memory.endsWith("Mi")) {
+        memoryRequest = parseFloat(requests.memory.replace("Mi", "")); // MiB to MB (approximately)
+      } else if (requests.memory.endsWith("Gi")) {
+        memoryRequest = parseFloat(requests.memory.replace("Gi", "")) * 1024; // GiB to MB
+      } else if (requests.memory.endsWith("Ki")) {
+        memoryRequest = parseFloat(requests.memory.replace("Ki", "")) / 1024; // KiB to MB
+      }
+    }
+
+    totalCpuRequests += cpuRequest;
+    totalMemoryRequests += memoryRequest;
+
+    // Calculate container-level utilization
+    const containerCpuUtilization =
+      cpuRequest > 0 ? ((cpuUsageCores / cpuRequest) * 100).toFixed(2) : null;
+    const containerMemoryUtilization =
+      memoryRequest > 0
+        ? ((memoryUsageMB / memoryRequest) * 100).toFixed(2)
+        : null;
+
+    containerMetrics.push({
+      name: container.name,
+      cpuUsage: cpuUsageCores.toFixed(3),
+      memoryUsage: memoryUsageMB.toFixed(2),
+      cpuRequest: cpuRequest.toFixed(3),
+      memoryRequest: memoryRequest.toFixed(2),
+      cpuUtilization: containerCpuUtilization
+        ? parseFloat(containerCpuUtilization)
+        : null,
+      memoryUtilization: containerMemoryUtilization
+        ? parseFloat(containerMemoryUtilization)
+        : null,
+    });
+  }
+
+  // Calculate pod-level utilization
+  const podCpuUtilization =
+    totalCpuRequests > 0
+      ? ((totalCpuUsage / totalCpuRequests) * 100).toFixed(2)
+      : null;
+  const podMemoryUtilization =
+    totalMemoryRequests > 0
+      ? ((totalMemoryUsage / totalMemoryRequests) * 100).toFixed(2)
+      : null;
+
+  return {
+    cpuUtilization: podCpuUtilization ? parseFloat(podCpuUtilization) : null,
+    memoryUtilization: podMemoryUtilization
+      ? parseFloat(podMemoryUtilization)
+      : null,
+    cpuUsage: totalCpuUsage.toFixed(3),
+    memoryUsage: totalMemoryUsage.toFixed(2),
+    cpuRequests: totalCpuRequests.toFixed(3),
+    memoryRequests: totalMemoryRequests.toFixed(2),
+    containerMetrics,
+    timestamp: podMetrics.timestamp,
+  };
+};
+
+/**
+ * Update pod resources (for subscription upgrades)
+ * @param {string} podName - Pod name
+ * @param {string} namespace - Pod namespace
+ * @param {Object} newResourceConfig - New resource configuration
+ * @returns {Object} Update result
+ */
+export const updatePodResources = async (
+  podName,
+  namespace,
+  newResourceConfig
+) => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      throw new Error("Kubernetes client not ready");
+    }
+
+    const appsV1Api = k8sConfig.getAppsV1Api();
+
+    // Get current deployment
+    const deployment = await appsV1Api.readNamespacedDeployment(
+      podName,
+      namespace
+    );
+
+    if (!deployment) {
+      throw new Error(
+        `Deployment ${podName} not found in namespace ${namespace}`
+      );
+    }
+
+    // Update deployment with new resource configuration
+    const updatedDeployment = {
+      ...deployment.body,
+      spec: {
+        ...deployment.body.spec,
+        template: {
+          ...deployment.body.spec.template,
+          spec: {
+            ...deployment.body.spec.template.spec,
+            containers: deployment.body.spec.template.spec.containers.map(
+              (container) => ({
+                ...container,
+                resources: {
+                  limits: {
+                    cpu:
+                      newResourceConfig.cpuLimit ||
+                      container.resources?.limits?.cpu ||
+                      "1",
+                    memory:
+                      newResourceConfig.memLimit ||
+                      container.resources?.limits?.memory ||
+                      "1Gi",
+                  },
+                  requests: {
+                    cpu:
+                      newResourceConfig.cpuRequest ||
+                      container.resources?.requests?.cpu ||
+                      "0.25",
+                    memory:
+                      newResourceConfig.memRequest ||
+                      container.resources?.requests?.memory ||
+                      "512Mi",
+                  },
+                },
+                ...(newResourceConfig.environmentVars && {
+                  env: [
+                    ...(container.env || []),
+                    ...Object.entries(newResourceConfig.environmentVars).map(
+                      ([key, value]) => ({
+                        name: key,
+                        value: String(value),
+                      })
+                    ),
+                  ],
+                }),
+              })
+            ),
+          },
+        },
+      },
+    };
+
+    // Apply the updated deployment
+    const result = await appsV1Api.replaceNamespacedDeployment(
+      podName,
+      namespace,
+      updatedDeployment
+    );
+
+    logger.info(`Updated pod resources for ${namespace}/${podName}`, {
+      newResources: {
+        cpuLimit: newResourceConfig.cpuLimit,
+        memLimit: newResourceConfig.memLimit,
+        cpuRequest: newResourceConfig.cpuRequest,
+        memRequest: newResourceConfig.memRequest,
+      },
+    });
+
+    return {
+      success: true,
+      podName,
+      namespace,
+      updatedResources: newResourceConfig,
+      kubernetesResponse: result.body,
+    };
+  } catch (error) {
+    logger.error(
+      `Error updating pod resources for ${namespace}/${podName}:`,
+      error
+    );
+    throw error;
+  }
+};
+
+/**
+ * Reset pod - Complete recreation from scratch
+ * This is different from restart as it completely destroys and recreates the pod
+ * @param {string} serviceInstanceId - Service instance ID
+ * @returns {Object} Reset result
+ */
+export const resetPod = async (serviceInstanceId) => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      throw new Error("Kubernetes client not ready");
+    }
+
+    // Get service instance with full subscription details
+    const serviceInstance = await prisma.serviceInstance.findUnique({
+      where: { id: serviceInstanceId },
+      include: {
+        subscription: {
+          include: {
+            user: true,
+            service: true,
+          },
+        },
+      },
+    });
+
+    if (!serviceInstance) {
+      throw new Error("Service instance not found");
+    }
+
+    const { subscription } = serviceInstance;
+    const { user, service } = subscription;
+
+    logger.info(
+      `Starting pod reset for service instance ${serviceInstanceId} (user: ${user.email}, service: ${service.name})`
+    );
+
+    // Update status to RESETTING
+    await prisma.serviceInstance.update({
+      where: { id: serviceInstanceId },
+      data: { status: "RESETTING" },
+    });
+
+    // Step 1: Backup current configuration for potential rollback
+    const backupConfig = {
+      originalStatus: serviceInstance.status,
+      originalCredentials: serviceInstance.credentials,
+      originalConfig: serviceInstance.customConfig,
+      resetTimestamp: new Date(),
+    };
+
+    logger.info(`Backing up configuration for pod ${serviceInstanceId}`);
+
+    // Step 2: Complete cleanup of existing resources
+    logger.info(`Cleaning up existing resources for pod ${serviceInstanceId}`);
+
+    try {
+      // Use existing deletePod logic but don't update status to DELETED
+      const coreV1Api = k8sConfig.getCoreV1Api();
+      const appsV1Api = k8sConfig.getAppsV1Api();
+      const networkingV1Api = k8sConfig.getNetworkingV1Api();
+
+      const { namespace, podName } = serviceInstance;
+      const deploymentConfig = serviceInstance.credentials || {};
+
+      // Delete resources in reverse order (same as deletePod)
+      try {
+        if (deploymentConfig.ingress) {
+          await networkingV1Api.deleteNamespacedIngress(
+            deploymentConfig.ingress,
+            namespace
+          );
+          logger.info(`Deleted ingress ${deploymentConfig.ingress} for reset`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to delete ingress during reset: ${error.message}`);
+      }
+
+      try {
+        if (deploymentConfig.service) {
+          await coreV1Api.deleteNamespacedService(
+            deploymentConfig.service,
+            namespace
+          );
+          logger.info(`Deleted service ${deploymentConfig.service} for reset`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to delete service during reset: ${error.message}`);
+      }
+
+      try {
+        if (deploymentConfig.deployment) {
+          await appsV1Api.deleteNamespacedDeployment(
+            deploymentConfig.deployment,
+            namespace
+          );
+          logger.info(
+            `Deleted deployment ${deploymentConfig.deployment} for reset`
+          );
+        }
+      } catch (error) {
+        logger.warn(
+          `Failed to delete deployment during reset: ${error.message}`
+        );
+      }
+
+      // Wait for resources to be fully cleaned up
+      logger.info(`Waiting for resource cleanup to complete...`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    } catch (cleanupError) {
+      logger.error(`Error during resource cleanup for reset:`, cleanupError);
+      // Continue with recreation attempt even if cleanup partially failed
+    }
+
+    // Step 3: Recreate pod from original service template
+    logger.info(
+      `Recreating pod from service template for ${serviceInstanceId}`
+    );
+
+    try {
+      // Generate fresh Kubernetes resource names (same as original)
+      const namespaceName = kubernetesUtils.generateNamespaceName(user.id);
+      const newPodName = kubernetesUtils.generatePodName(service.name, user.id);
+      const serviceName = kubernetesUtils.generateServiceName(
+        service.name,
+        user.id
+      );
+      const internalUrl = `http://${serviceName}.${namespaceName}.svc.cluster.local:${
+        service.containerPort || 80
+      }`;
+      const externalUrl = kubernetesUtils.generateExternalUrl(
+        subscription.subdomain,
+        service.name
+      );
+
+      // Parse resource limits from service catalog
+      const resourceLimits = {
+        cpu: service.cpuLimit || "1",
+        memory: service.memLimit || "1Gi",
+      };
+
+      // 1. Ensure namespace exists
+      await ensureNamespace(namespaceName, user.id);
+
+      // 2. Create fresh deployment
+      const deployment = await createDeployment({
+        namespaceName,
+        deploymentName: newPodName,
+        serviceName: service.name,
+        dockerImage: service.dockerImage,
+        containerPort: service.containerPort || 80,
+        resourceLimits,
+        serviceConfig: {}, // Fresh config - no custom user config to avoid issues
+        userId: user.id,
+        subscriptionId: subscription.id,
+      });
+
+      // 3. Create fresh service
+      const k8sService = await createService({
+        namespaceName,
+        serviceName,
+        deploymentName: newPodName,
+        port: service.containerPort || 80,
+        targetPort: service.containerPort || 80,
+      });
+
+      // 4. Create fresh ingress
+      let ingress = null;
+      try {
+        ingress = await createIngress({
+          namespaceName,
+          ingressName: kubernetesUtils.generateIngressName(
+            service.name,
+            user.id
+          ),
+          serviceName,
+          subdomain: subscription.subdomain,
+          serviceDomain: service.name,
+          port: service.containerPort || 80,
+        });
+      } catch (ingressError) {
+        logger.warn(
+          `Failed to create ingress during reset: ${ingressError.message}`
+        );
+      }
+
+      // Step 4: Update service instance with fresh configuration
+      const updatedServiceInstance = await prisma.serviceInstance.update({
+        where: { id: serviceInstanceId },
+        data: {
+          status: "PENDING", // Will be updated by monitoring
+          podName: newPodName,
+          namespace: namespaceName,
+          internalUrl,
+          externalUrl,
+          cpuAllocated: resourceLimits.cpu,
+          memAllocated: resourceLimits.memory,
+          credentials: {
+            deployment: deployment.metadata.name,
+            service: k8sService.metadata.name,
+            ingress: ingress?.metadata.name,
+          },
+          customConfig: null, // Reset custom config to avoid issues
+          resetCount: (serviceInstance.resetCount || 0) + 1,
+          lastResetAt: new Date(),
+          resetBackup: JSON.stringify(backupConfig),
+        },
+      });
+
+      // Step 5: Start monitoring the new pod
+      monitorPodStatus(serviceInstanceId, namespaceName, newPodName);
+
+      // Step 6: Queue notification about pod reset
+      try {
+        await notificationJobs.queuePodReset(serviceInstanceId, {
+          userEmail: user.email,
+          serviceName: service.displayName || service.name,
+          resetReason: "Pod reset requested",
+        });
+      } catch (notificationError) {
+        logger.error(
+          `Failed to queue reset notification for ${serviceInstanceId}:`,
+          notificationError
+        );
+      }
+
+      logger.info(
+        `Successfully completed pod reset for service instance ${serviceInstanceId}`
+      );
+
+      return {
+        id: serviceInstanceId,
+        podName: newPodName,
+        namespace: namespaceName,
+        status: "PENDING",
+        message: "Pod reset completed successfully - fresh instance created",
+        resetAt: new Date(),
+        resetCount: updatedServiceInstance.resetCount,
+        backupConfig,
+        newConfiguration: {
+          deployment: deployment.metadata.name,
+          service: k8sService.metadata.name,
+          ingress: ingress?.metadata.name,
+        },
+      };
+    } catch (recreationError) {
+      logger.error(`Error during pod recreation for reset:`, recreationError);
+
+      // Attempt to restore from backup or mark as failed
+      try {
+        await prisma.serviceInstance.update({
+          where: { id: serviceInstanceId },
+          data: {
+            status: "FAILED",
+            lastError: `Reset failed during recreation: ${recreationError.message}`,
+          },
+        });
+      } catch (updateError) {
+        logger.error(
+          `Failed to update status after reset failure:`,
+          updateError
+        );
+      }
+
+      throw new Error(
+        `Pod reset failed during recreation: ${recreationError.message}`
+      );
+    }
+  } catch (error) {
+    logger.error(
+      `Error resetting pod for service instance ${serviceInstanceId}:`,
+      error
+    );
+
+    // Ensure status is updated to reflect failure
+    try {
+      await prisma.serviceInstance.update({
+        where: { id: serviceInstanceId },
+        data: {
+          status: "FAILED",
+          lastError: `Reset failed: ${error.message}`,
+        },
+      });
+    } catch (updateError) {
+      logger.error(`Failed to update status after reset error:`, updateError);
+    }
+
+    throw error;
+  }
+};
+
+/**
+ * User reset pod - Reset user's own pod
+ * @param {string} subscriptionId - Subscription ID
+ * @param {string} userId - User ID (for ownership verification)
+ * @returns {Object} Reset result
+ */
+export const userResetPod = async (subscriptionId, userId) => {
+  try {
+    // Get subscription with service instance
+    const subscription = await prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: {
+        serviceInstance: true,
+        user: true,
+        service: true,
+      },
+    });
+
+    if (!subscription) {
+      throw new Error("Subscription not found");
+    }
+
+    // Verify ownership
+    if (subscription.userId !== userId) {
+      throw new Error("Access denied - not your subscription");
+    }
+
+    // Check if subscription has a service instance
+    if (!subscription.serviceInstance) {
+      throw new Error("No active service instance found for this subscription");
+    }
+
+    // Check if subscription is in a resettable state
+    if (!["ACTIVE", "EXPIRED"].includes(subscription.status)) {
+      throw new Error("Subscription must be ACTIVE or EXPIRED to reset pod");
+    }
+
+    // Check if pod is in a resettable state
+    const allowedPodStates = ["RUNNING", "FAILED", "STOPPED", "PENDING"];
+    if (!allowedPodStates.includes(subscription.serviceInstance.status)) {
+      throw new Error(
+        `Pod cannot be reset in current state: ${subscription.serviceInstance.status}`
+      );
+    }
+
+    logger.info(
+      `User ${userId} requesting reset for subscription ${subscriptionId} (pod: ${subscription.serviceInstance.id})`
+    );
+
+    // Perform the reset
+    const resetResult = await resetPod(subscription.serviceInstance.id);
+
+    return {
+      ...resetResult,
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        service: subscription.service,
+      },
+      message:
+        "Your service has been reset successfully. It will be available shortly with fresh configuration.",
+    };
+  } catch (error) {
+    logger.error(
+      `Error in user reset pod for subscription ${subscriptionId}:`,
+      error
+    );
+    throw error;
+  }
+};
+
+/**
+ * Admin reset pod - Reset any user's pod
+ * @param {string} serviceInstanceId - Service instance ID
+ * @returns {Object} Reset result with admin info
+ */
+export const adminResetPod = async (serviceInstanceId) => {
+  try {
+    // Get service instance with full details
+    const serviceInstance = await prisma.serviceInstance.findUnique({
+      where: { id: serviceInstanceId },
+      include: {
+        subscription: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            service: true,
+          },
+        },
+      },
+    });
+
+    if (!serviceInstance) {
+      throw new Error("Pod not found");
+    }
+
+    logger.info(
+      `Admin resetting pod ${serviceInstanceId} for user ${serviceInstance.subscription.user.email}`
+    );
+
+    // Perform the reset
+    const resetResult = await resetPod(serviceInstanceId);
+
+    return {
+      ...resetResult,
+      adminInfo: {
+        owner: serviceInstance.subscription.user,
+        subscription: {
+          id: serviceInstance.subscription.id,
+          status: serviceInstance.subscription.status,
+        },
+        service: serviceInstance.subscription.service,
+      },
+      message: "Pod reset completed by admin - user will be notified",
+    };
+  } catch (error) {
+    logger.error(`Error in admin reset pod for ${serviceInstanceId}:`, error);
     throw error;
   }
 };

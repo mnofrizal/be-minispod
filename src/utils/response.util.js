@@ -141,8 +141,17 @@ const createResponse = (success, message, data = null, errorDetails = null) => {
     response.data = data;
     response.statusCode = 200;
   } else {
-    response.error = errorDetails;
-    response.statusCode = 500;
+    // Simple validation: if no data provided, it's a validation error (400)
+    // If data is provided, it's likely a server error (500)
+    if (data === null && errorDetails === null) {
+      response.statusCode = 400; // Validation errors
+    } else if (data !== null) {
+      response.data = data;
+      response.statusCode = 400; // Validation errors with data
+    } else {
+      response.error = errorDetails;
+      response.statusCode = 500; // Server errors
+    }
   }
 
   return response;

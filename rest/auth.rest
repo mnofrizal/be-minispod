@@ -18,16 +18,6 @@ Content-Type: {{contentType}}
   "confirmPassword": "SecurePass123!"
 }
 
-###
-
-### Login User
-POST {{baseUrl}}/auth/login
-Content-Type: {{contentType}}
-
-{
-  "email": "john.doe@example.com",
-  "password": "SecurePass123!"
-}
 
 ###
 
@@ -47,7 +37,7 @@ POST {{baseUrl}}/auth/login
 Content-Type: {{contentType}}
 
 {
-  "email": "customer@test.local",
+  "email": "customer@test.com",
   "password": "Customer123!@#"
 }
 

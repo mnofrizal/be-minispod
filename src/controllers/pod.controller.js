@@ -293,3 +293,32 @@ export const debugKubernetesState = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * Reset any pod (Admin version)
+ * POST /api/v1/admin/pods/:id/reset
+ */
+export const adminResetPod = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    logger.info(`Admin resetting pod ${id} - User: ${req.user.email}`);
+
+    const result = await podService.adminResetPod(id);
+
+    res
+      .status(HTTP_STATUS.OK)
+      .json(success(result, "Pod reset completed successfully by admin"));
+  } catch (err) {
+    logger.error("Error admin resetting pod:", err);
+    if (err.message.includes("not found")) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json(error("Pod not found"));
+    }
+    if (err.message.includes("Kubernetes client not ready")) {
+      return res
+        .status(HTTP_STATUS.SERVICE_UNAVAILABLE)
+        .json(error("Kubernetes service temporarily unavailable"));
+    }
+    next(err);
+  }
+};

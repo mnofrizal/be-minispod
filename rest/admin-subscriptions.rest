@@ -1,0 +1,341 @@
+### Admin Subscription Management API Testing
+### Base URL: http://localhost:3000/api/v1/admin/subscriptions
+
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@subscriptionId = cmdixhiho000ig7dw08j98ixq
+@userId = clxxx987654321
+
+### ========================================
+### AUTHENTICATION (Get Admin Token First)
+### ========================================
+
+@adminToken = Bearer {{login_response.response.body.data.tokens.accessToken}}
+### Login to get access token
+# @name login_response
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+### ========================================
+### SUBSCRIPTION STATISTICS
+### ========================================
+
+### Get Comprehensive Subscription Statistics
+GET {{baseUrl}}/admin/subscriptions/stats
+Authorization: {{adminToken}}
+
+### ========================================
+### GET ALL SUBSCRIPTIONS
+### ========================================
+
+### Get All Subscriptions (Default)
+GET {{baseUrl}}/admin/subscriptions
+Authorization: {{adminToken}}
+
+### Get All Subscriptions with Pagination
+GET {{baseUrl}}/admin/subscriptions?page=1&limit=10
+Authorization: {{adminToken}}
+
+### Get Subscriptions by Status
+GET {{baseUrl}}/admin/subscriptions?status=ACTIVE
+Authorization: {{adminToken}}
+
+### Get Subscriptions by User ID
+GET {{baseUrl}}/admin/subscriptions?userId={{userId}}
+Authorization: {{adminToken}}
+
+### Get Subscriptions with Search
+GET {{baseUrl}}/admin/subscriptions?search=wordpress
+Authorization: {{adminToken}}
+
+### Get Subscriptions with Sorting
+GET {{baseUrl}}/admin/subscriptions?sortBy=createdAt&sortOrder=desc
+Authorization: {{adminToken}}
+
+### Get Subscriptions with Multiple Filters
+GET {{baseUrl}}/admin/subscriptions?status=ACTIVE&page=1&limit=5&sortBy=expiresAt&sortOrder=asc
+Authorization: {{adminToken}}
+
+### ========================================
+### GET SUBSCRIPTION DETAILS
+### ========================================
+
+### Get Subscription Details by ID
+GET {{baseUrl}}/admin/subscriptions/{{subscriptionId}}
+Authorization: {{adminToken}}
+
+### ========================================
+### GET SUBSCRIPTIONS BY USER
+### ========================================
+
+### Get All Subscriptions for Specific User
+GET {{baseUrl}}/admin/subscriptions/user/{{userId}}
+Authorization: {{adminToken}}
+
+### Get User Subscriptions with Pagination
+GET {{baseUrl}}/admin/subscriptions/user/{{userId}}?page=1&limit=5
+Authorization: {{adminToken}}
+
+### ========================================
+### UPDATE SUBSCRIPTION STATUS
+### ========================================
+
+
+### Get All Subscriptions (Default)
+GET {{baseUrl}}/admin/subscriptions
+Authorization: {{adminToken}}
+
+### Update Subscription Status to ACTIVE
+PUT {{baseUrl}}/admin/subscriptions/cmdiutpnp000ews6a0qctlsvt/status
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Update Subscription Status to EXPIRED
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "EXPIRED"
+}
+
+### Update Subscription Status to CANCELLED
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "CANCELLED"
+}
+
+### Update Subscription Status to SUSPENDED
+PUT {{baseUrl}}/admin/subscriptions/cmdiutpnp000ews6a0qctlsvt/status
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "SUSPENDED"
+}
+
+### Update Subscription Status to PENDING_DEPLOYMENT
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "PENDING_DEPLOYMENT"
+}
+
+### ========================================
+### EXTEND SUBSCRIPTION
+### ========================================
+
+### Extend Subscription by 30 Days
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/extend
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "extensionDays": 30
+}
+
+### Extend Subscription by 7 Days
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/extend
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "extensionDays": 7
+}
+
+### Extend Subscription by 90 Days
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/extend
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "extensionDays": 90
+}
+
+### ========================================
+### FORCE CANCEL SUBSCRIPTION
+### ========================================
+
+### Force Cancel Subscription with Reason
+DELETE {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/force-cancel
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "Customer requested cancellation due to service issues. Refund processed."
+}
+
+### Force Cancel for Policy Violation
+DELETE {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/force-cancel
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": "Subscription cancelled due to terms of service violation. Account suspended."
+}
+
+### ========================================
+### BULK OPERATIONS
+### ========================================
+
+### Bulk Update Status (Multiple Subscriptions)
+PUT {{baseUrl}}/admin/subscriptions/bulk-update
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "subscriptionIds": ["clxxx123456789", "clxxx987654321", "clxxx555666777"],
+  "action": "updateStatus",
+  "data": {
+    "status": "EXPIRED"
+  }
+}
+
+### Bulk Extend Subscriptions
+PUT {{baseUrl}}/admin/subscriptions/bulk-update
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "subscriptionIds": ["clxxx123456789", "clxxx987654321"],
+  "action": "extend",
+  "data": {
+    "extensionDays": 15
+  }
+}
+
+### Bulk Cancel Subscriptions
+PUT {{baseUrl}}/admin/subscriptions/bulk-update
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "subscriptionIds": ["clxxx123456789", "clxxx987654321"],
+  "action": "cancel",
+  "data": {
+    "reason": "Bulk cancellation for maintenance period. Services will be restored."
+  }
+}
+
+### ========================================
+### ERROR TESTING
+### ========================================
+
+### Test Invalid Subscription ID
+GET {{baseUrl}}/admin/subscriptions/invalid-id-123
+Authorization: {{adminToken}}
+
+### Test Invalid Status Update
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "INVALID_STATUS"
+}
+
+### Test Invalid Extension Days
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/extend
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "extensionDays": -5
+}
+
+### Test Force Cancel Without Reason
+DELETE {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/force-cancel
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "reason": ""
+}
+
+### Test Bulk Update with Invalid Action
+PUT {{baseUrl}}/admin/subscriptions/bulk-update
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "subscriptionIds": ["clxxx123456789"],
+  "action": "invalidAction",
+  "data": {}
+}
+
+### Test Bulk Update with Too Many IDs
+PUT {{baseUrl}}/admin/subscriptions/bulk-update
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{
+  "subscriptionIds": [
+    "id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "id9", "id10",
+    "id11", "id12", "id13", "id14", "id15", "id16", "id17", "id18", "id19", "id20",
+    "id21", "id22", "id23", "id24", "id25", "id26", "id27", "id28", "id29", "id30",
+    "id31", "id32", "id33", "id34", "id35", "id36", "id37", "id38", "id39", "id40",
+    "id41", "id42", "id43", "id44", "id45", "id46", "id47", "id48", "id49", "id50",
+    "id51"
+  ],
+  "action": "updateStatus",
+  "data": {
+    "status": "ACTIVE"
+  }
+}
+
+### ========================================
+### UNAUTHORIZED ACCESS TESTING
+### ========================================
+
+### Test Without Authorization Token
+GET {{baseUrl}}/admin/subscriptions
+
+### Test With Invalid Token
+GET {{baseUrl}}/admin/subscriptions
+Authorization: Bearer invalid-token-here
+
+### Test With User Token (Should Fail - Admin Only)
+GET {{baseUrl}}/admin/subscriptions
+Authorization: Bearer user-token-here
+
+### ========================================
+### PAGINATION AND FILTERING EDGE CASES
+### ========================================
+
+### Test Large Page Number
+GET {{baseUrl}}/admin/subscriptions?page=999&limit=10
+Authorization: {{adminToken}}
+
+### Test Maximum Limit
+GET {{baseUrl}}/admin/subscriptions?page=1&limit=100
+Authorization: {{adminToken}}
+
+### Test Limit Exceeding Maximum
+GET {{baseUrl}}/admin/subscriptions?page=1&limit=200
+Authorization: {{adminToken}}
+
+### Test Invalid Sort Field
+GET {{baseUrl}}/admin/subscriptions?sortBy=invalidField&sortOrder=desc
+Authorization: {{adminToken}}
+
+### Test Search with Special Characters
+GET {{baseUrl}}/admin/subscriptions?search=@#$%^&*()
+Authorization: {{adminToken}}
+
+### Test Multiple Status Filters (Should Use Last One)
+GET {{baseUrl}}/admin/subscriptions?status=ACTIVE&status=EXPIRED
+Authorization: {{adminToken}}

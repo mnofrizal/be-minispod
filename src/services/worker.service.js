@@ -110,66 +110,165 @@ const getAllWorkerNodes = async (options = {}) => {
 };
 
 /**
- * Get worker node by ID with real-time Kubernetes data
+ * Get worker node by ID or name directly from Kubernetes API
  * @param {string} nodeId - Worker node ID or name
  * @returns {Promise<Object|null>} Worker node with live data
  */
 const getWorkerNodeById = async (nodeId) => {
   try {
-    // Check if it's a database ID or node name
-    const isUUID =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        nodeId
-      );
+    // Check if it's a database ID (CUID format) or node name
+    const isCUID = /^c[a-z0-9]{24}$/i.test(nodeId);
 
-    let dbNode;
-    if (isUUID) {
-      dbNode = await prisma.workerNode.findUnique({
+    let nodeName = nodeId;
+
+    // If it's a CUID, try to find the node name from database first
+    if (isCUID) {
+      const dbNode = await prisma.workerNode.findUnique({
         where: { id: nodeId },
+        select: { name: true },
       });
-    } else {
-      dbNode = await prisma.workerNode.findUnique({
-        where: { name: nodeId },
-      });
+
+      if (!dbNode) {
+        logger.warn(`Worker node with ID ${nodeId} not found in database`);
+        return null;
+      }
+
+      nodeName = dbNode.name;
     }
 
-    if (!dbNode) {
+    // Get live Kubernetes data directly
+    const liveNode = await getKubernetesNodeByName(nodeName);
+
+    if (!liveNode) {
+      logger.warn(`Worker node ${nodeName} not found in Kubernetes cluster`);
       return null;
     }
 
-    // Get live Kubernetes data for this node
-    const liveNode = await getKubernetesNodeByName(dbNode.name);
+    // Parse and enrich the live node data
+    const nodeData = parseKubernetesNode(liveNode);
 
-    if (!liveNode) {
-      // Node exists in DB but not in cluster - mark as offline
-      await prisma.workerNode.update({
-        where: { id: dbNode.id },
-        data: {
-          status: "INACTIVE",
-          isReady: false,
-          isSchedulable: false,
-          updatedAt: new Date(),
-        },
-      });
+    // Get current pods on this node for resource calculation
+    const pods = await getPodsOnNode(nodeName);
+    const currentPods = pods.length;
 
-      return {
-        ...dbNode,
-        status: "INACTIVE",
-        isReady: false,
-        isSchedulable: false,
-        liveData: null,
-      };
+    // Calculate allocated resources from running pods
+    let allocatedCPU = 0;
+    let allocatedMemoryGB = 0;
+
+    for (const pod of pods) {
+      const containers = pod.spec?.containers || [];
+      for (const container of containers) {
+        const resources = container.resources || {};
+        const requests = resources.requests || {};
+
+        if (requests.cpu) {
+          allocatedCPU += parseFloat(requests.cpu.replace("m", "")) / 1000;
+        }
+        if (requests.memory) {
+          allocatedMemoryGB += parseResourceString(requests.memory);
+        }
+      }
     }
 
-    // Merge database and live data
-    const enrichedNode = await enrichNodeWithLiveData(dbNode, liveNode);
+    // Get real-time utilization metrics from metrics API
+    const nodeMetrics = await getNodeMetrics(nodeName);
+    const utilizationData = parseNodeMetrics(
+      nodeMetrics,
+      liveNode.status?.capacity
+    );
 
-    logger.info(`Retrieved worker node with live data: ${enrichedNode.name}`);
+    // Create enriched node object with live data and metrics
+    const enrichedNode = {
+      // Generate a temporary ID for API consistency (not stored in DB)
+      id: isCUID ? nodeId : `live-${nodeName}`,
+      name: nodeData.name,
+      hostname: nodeData.hostname,
+      ipAddress: nodeData.ipAddress,
+      architecture: nodeData.architecture,
+      operatingSystem: nodeData.operatingSystem,
+      cpuCores: nodeData.cpuCores,
+      cpuArchitecture: nodeData.cpuArchitecture,
+      totalMemory: nodeData.totalMemory,
+      totalStorage: nodeData.totalStorage,
+      allocatedCPU: allocatedCPU.toString(),
+      allocatedMemory: allocatedMemoryGB.toString(),
+      maxPods: nodeData.maxPods,
+      currentPods,
+      status: nodeData.isReady ? "ACTIVE" : "INACTIVE",
+      isReady: nodeData.isReady,
+      isSchedulable: nodeData.isSchedulable,
+      labels: nodeData.labels,
+      taints: nodeData.taints,
+      kubeletVersion: nodeData.kubeletVersion,
+      containerRuntime: nodeData.containerRuntime,
+      kernelVersion: nodeData.kernelVersion,
+      osImage: nodeData.osImage,
+      lastHeartbeat: new Date(), // Live data timestamp
+      createdAt: new Date(), // Live data timestamp
+      updatedAt: new Date(), // Live data timestamp
+      // Real-time utilization metrics
+      metrics: {
+        cpuUtilization: utilizationData.cpuUtilization,
+        memoryUtilization: utilizationData.memoryUtilization,
+        cpuUsage: utilizationData.cpuUsage,
+        memoryUsage: utilizationData.memoryUsage,
+        metricsTimestamp: utilizationData.timestamp,
+        metricsAvailable: nodeMetrics !== null,
+      },
+      liveData: {
+        conditions: liveNode.status?.conditions || [],
+        capacity: liveNode.status?.capacity || {},
+        allocatable: liveNode.status?.allocatable || {},
+        nodeInfo: liveNode.status?.nodeInfo || {},
+        addresses: liveNode.status?.addresses || [],
+      },
+    };
+
+    logger.info(
+      `Retrieved worker node directly from Kubernetes: ${enrichedNode.name}`
+    );
 
     return enrichedNode;
   } catch (error) {
-    logger.error("Error getting worker node by ID:", error);
+    logger.error("Error getting worker node from Kubernetes:", error);
     throw error;
+  }
+};
+
+/**
+ * Helper function to parse memory/storage strings (e.g., "32Gi", "1Ti", "500Mi")
+ * @param {string} resourceStr - Resource string to parse
+ * @returns {number} Resource value in GB
+ */
+const parseResourceString = (resourceStr) => {
+  if (!resourceStr || resourceStr === "0") return 0;
+
+  const match = resourceStr.match(/^(\d+(?:\.\d+)?)(.*)?$/);
+  if (!match) return 0;
+
+  const value = parseFloat(match[1]);
+  const unit = (match[2] || "").toLowerCase();
+
+  // Convert to GB for consistency
+  switch (unit) {
+    case "ki":
+      return value / 1024 / 1024; // KiB to GB
+    case "mi":
+      return value / 1024; // MiB to GB
+    case "gi":
+      return value; // GiB to GB
+    case "ti":
+      return value * 1024; // TiB to GB
+    case "k":
+      return value / 1000 / 1000; // KB to GB
+    case "m":
+      return value / 1000; // MB to GB
+    case "g":
+      return value; // GB to GB
+    case "t":
+      return value * 1000; // TB to GB
+    default:
+      return value; // Assume GB if no unit
   }
 };
 
@@ -704,6 +803,139 @@ const evictPod = async (podName, namespace, options = {}) => {
 };
 
 /**
+ * Get node metrics from Kubernetes metrics API
+ * @param {string} nodeName - Node name
+ * @returns {Promise<Object|null>} Node metrics or null
+ */
+const getNodeMetrics = async (nodeName) => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      logger.warn("Kubernetes client not ready, skipping metrics");
+      return null;
+    }
+
+    // Try to get metrics API client
+    let metricsApi;
+    try {
+      metricsApi = k8sConfig.getMetricsV1beta1Api();
+    } catch (error) {
+      logger.warn(
+        "Metrics API not available, skipping metrics:",
+        error.message
+      );
+      return null;
+    }
+
+    // Fetch node metrics using CustomObjectsApi (nodes are cluster-scoped)
+    const response = await metricsApi.getClusterCustomObject(
+      "metrics.k8s.io",
+      "v1beta1",
+      "nodes",
+      nodeName
+    );
+    return response.body;
+  } catch (error) {
+    if (error.response?.statusCode === 404) {
+      logger.warn(
+        `Node metrics not found for ${nodeName} - metrics server may not be installed`
+      );
+      return null;
+    }
+    logger.warn(`Error getting node metrics for ${nodeName}:`, error.message);
+    return null;
+  }
+};
+
+/**
+ * Get all node metrics from Kubernetes metrics API
+ * @returns {Promise<Array>} Array of node metrics
+ */
+const getAllNodeMetrics = async () => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      logger.warn("Kubernetes client not ready, skipping metrics");
+      return [];
+    }
+
+    // Try to get metrics API client
+    let metricsApi;
+    try {
+      metricsApi = k8sConfig.getMetricsV1beta1Api();
+    } catch (error) {
+      logger.warn(
+        "Metrics API not available, skipping metrics:",
+        error.message
+      );
+      return [];
+    }
+
+    // Fetch all node metrics using CustomObjectsApi
+    const response = await metricsApi.listClusterCustomObject(
+      "metrics.k8s.io",
+      "v1beta1",
+      "nodes"
+    );
+    return response.body.items || [];
+  } catch (error) {
+    logger.warn("Error getting all node metrics:", error.message);
+    return [];
+  }
+};
+
+/**
+ * Parse node metrics to extract CPU and memory utilization
+ * @param {Object} nodeMetrics - Node metrics from Kubernetes API
+ * @param {Object} nodeCapacity - Node capacity from Kubernetes API
+ * @returns {Object} Parsed utilization data
+ */
+const parseNodeMetrics = (nodeMetrics, nodeCapacity) => {
+  if (!nodeMetrics || !nodeMetrics.usage) {
+    return {
+      cpuUtilization: null,
+      memoryUtilization: null,
+      cpuUsage: null,
+      memoryUsage: null,
+    };
+  }
+
+  const usage = nodeMetrics.usage;
+  const capacity = nodeCapacity || {};
+
+  // Parse CPU usage (from nanocores to cores)
+  const cpuUsageNano = parseInt(usage.cpu?.replace("n", "") || "0");
+  const cpuUsageCores = cpuUsageNano / 1000000000; // Convert nanocores to cores
+
+  // Parse memory usage (from bytes to GB)
+  const memoryUsageBytes =
+    parseInt(usage.memory?.replace("Ki", "") || "0") * 1024; // Ki to bytes
+  const memoryUsageGB = memoryUsageBytes / (1024 * 1024 * 1024); // Bytes to GB
+
+  // Calculate utilization percentages
+  const totalCpuCores = parseInt(capacity.cpu || "0");
+  const totalMemoryKi = parseInt(capacity.memory?.replace("Ki", "") || "0");
+  const totalMemoryGB = (totalMemoryKi * 1024) / (1024 * 1024 * 1024);
+
+  const cpuUtilization =
+    totalCpuCores > 0
+      ? ((cpuUsageCores / totalCpuCores) * 100).toFixed(2)
+      : null;
+  const memoryUtilization =
+    totalMemoryGB > 0
+      ? ((memoryUsageGB / totalMemoryGB) * 100).toFixed(2)
+      : null;
+
+  return {
+    cpuUtilization: cpuUtilization ? parseFloat(cpuUtilization) : null,
+    memoryUtilization: memoryUtilization ? parseFloat(memoryUtilization) : null,
+    cpuUsage: cpuUsageCores.toFixed(3),
+    memoryUsage: memoryUsageGB.toFixed(2),
+    timestamp: nodeMetrics.timestamp,
+  };
+};
+
+/**
  * Sync Kubernetes nodes with database
  * @param {Array} liveNodes - Live Kubernetes nodes
  * @returns {Promise<Array>} Synced nodes with enriched data
@@ -711,6 +943,15 @@ const evictPod = async (podName, namespace, options = {}) => {
 const syncNodesWithDatabase = async (liveNodes) => {
   try {
     const syncedNodes = [];
+
+    // Get all node metrics at once for efficiency
+    const allNodeMetrics = await getAllNodeMetrics();
+    const metricsMap = new Map();
+    allNodeMetrics.forEach((metric) => {
+      if (metric.metadata?.name) {
+        metricsMap.set(metric.metadata.name, metric);
+      }
+    });
 
     for (const liveNode of liveNodes) {
       const nodeData = parseKubernetesNode(liveNode);
@@ -743,8 +984,13 @@ const syncNodesWithDatabase = async (liveNodes) => {
         });
       }
 
-      // Enrich with live data
-      const enrichedNode = await enrichNodeWithLiveData(dbNode, liveNode);
+      // Enrich with live data and metrics
+      const nodeMetrics = metricsMap.get(nodeData.name);
+      const enrichedNode = await enrichNodeWithLiveData(
+        dbNode,
+        liveNode,
+        nodeMetrics
+      );
       syncedNodes.push(enrichedNode);
     }
 
@@ -817,7 +1063,7 @@ const parseKubernetesNode = (k8sNode) => {
  * @param {Object} liveNode - Live Kubernetes node
  * @returns {Promise<Object>} Enriched node data
  */
-const enrichNodeWithLiveData = async (dbNode, liveNode) => {
+const enrichNodeWithLiveData = async (dbNode, liveNode, nodeMetrics = null) => {
   try {
     const liveData = parseKubernetesNode(liveNode);
 
@@ -877,12 +1123,30 @@ const enrichNodeWithLiveData = async (dbNode, liveNode) => {
       }
     }
 
+    // Get real-time utilization metrics if not provided
+    if (!nodeMetrics) {
+      nodeMetrics = await getNodeMetrics(dbNode.name);
+    }
+    const utilizationData = parseNodeMetrics(
+      nodeMetrics,
+      liveNode.status?.capacity
+    );
+
     return {
       ...dbNode,
       ...liveData,
       currentPods,
       allocatedCPU: allocatedCPU.toString(),
       allocatedMemory: allocatedMemoryGB.toString(),
+      // Real-time utilization metrics
+      metrics: {
+        cpuUtilization: utilizationData.cpuUtilization,
+        memoryUtilization: utilizationData.memoryUtilization,
+        cpuUsage: utilizationData.cpuUsage,
+        memoryUsage: utilizationData.memoryUsage,
+        metricsTimestamp: utilizationData.timestamp,
+        metricsAvailable: nodeMetrics !== null,
+      },
       liveData: {
         conditions: liveNode.status?.conditions || [],
         capacity: liveNode.status?.capacity || {},

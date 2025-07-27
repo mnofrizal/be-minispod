@@ -1,6 +1,7 @@
 @baseUrl = http://localhost:3000/api/v1
 @authToken = {{login_response.response.body.data.tokens.accessToken}}
 @nodeId = {{get_all_response.response.body.data.workers[0].id}}
+@nodeName = {{get_all_response.response.body.data.workers[0].name}}
 
 ### Login to get access token
 # @name login_response
@@ -43,8 +44,16 @@ Authorization: Bearer {{authToken}}
 POST {{baseUrl}}/admin/workers/sync
 Authorization: Bearer {{authToken}}
 
-### Admin - Get worker node details
+### Admin - Get worker node details (by database ID)
 GET {{baseUrl}}/admin/workers/{{nodeId}}
+Authorization: Bearer {{authToken}}
+
+### Admin - Get worker node details (by node name - direct from Kubernetes)
+GET {{baseUrl}}/admin/workers/{{nodeName}}
+Authorization: Bearer {{authToken}}
+
+### Admin - Get worker node details (hardcoded node name for testing)
+GET {{baseUrl}}/admin/workers/i6700
 Authorization: Bearer {{authToken}}
 
 ### Admin - Cordon worker node

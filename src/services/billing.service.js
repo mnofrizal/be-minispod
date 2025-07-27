@@ -852,6 +852,8 @@ export const transactionService = {
           currency: "IDR",
           referenceId: subscriptionId,
           referenceType: "SUBSCRIPTION",
+          // NEW: Set subscriptionId for direct Prisma relation
+          subscriptionId: subscriptionId,
           paymentGateway: "BALANCE", // Paid from user balance
           paymentMethod: "CREDIT_BALANCE",
         },

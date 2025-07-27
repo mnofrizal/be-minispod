@@ -22,13 +22,15 @@ model User {
     updatedAt DateTime @updatedAt
 
     // Relations
-    subscriptions       Subscription[]
-    webhooks            Webhook[]
-    balance             UserBalance?
-    topUpTransactions   TopUpTransaction[]
-    invoices            Invoice[]
-    balanceTransactions BalanceTransaction[] // To be deprecated
-    transactions        Transaction[]
+    subscriptions        Subscription[]
+    webhooks             Webhook[]
+    balance              UserBalance?
+    topUpTransactions    TopUpTransaction[]
+    invoices             Invoice[]
+    balanceTransactions  BalanceTransaction[] // To be deprecated
+    transactions         Transaction[]
+    // Plan change tracking
+    initiatedPlanChanges SubscriptionPlanChange[]
 
     @@map("users")
 }
@@ -75,7 +77,9 @@ model ServiceCatalog {
     updatedAt DateTime @updatedAt
 
     // Relations
-    subscriptions Subscription[]
+    subscriptions   Subscription[]
+    planChangesFrom SubscriptionPlanChange[] @relation("PlanChangeFromService")
+    planChangesTo   SubscriptionPlanChange[] @relation("PlanChangeToService")
 
     // NEW: Composite unique constraint for name + variant
     @@unique([name, variant])
@@ -100,12 +104,16 @@ model Subscription {
     updatedAt DateTime @updatedAt
 
     // Relations
-    user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    service                  ServiceCatalog            @relation(fields: [serviceId], references: [id])
-    serviceInstance          ServiceInstance?
-    subscriptionTransactions SubscriptionTransaction[]
-    usageMetrics             UsageMetric[]
-    invoice                  Invoice?
+    user                 User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    service              ServiceCatalog           @relation(fields: [serviceId], references: [id])
+    serviceInstance      ServiceInstance?
+    usageMetrics         UsageMetric[]
+    invoice              Invoice?
+    // Direct relation to unified transactions
+    transactions         Transaction[]            @relation("SubscriptionTransactions")
+    // Plan change tracking
+    planChanges          SubscriptionPlanChange[]
+    proratedCalculations ProratedCalculation[]
 
     @@map("subscriptions")
 }
@@ -132,6 +140,15 @@ model ServiceInstance {
     // Health monitoring fields
     lastHealthCheck DateTime?
     lastStatusSync  DateTime?
+
+    // Reset functionality fields
+    resetCount       Int       @default(0) // Number of times pod has been reset
+    lastResetAt      DateTime? // Last reset timestamp
+    resetBackup      String? // JSON backup of configuration before reset
+    customConfig     Json? // Custom user configuration
+    deploymentConfig Json? // Deployment configuration
+    resourceLimits   Json? // Resource limits configuration
+    lastError        String? // Last error message
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -163,31 +180,6 @@ model UsageMetric {
     @@map("usage_metrics")
 }
 
-// Subscription-specific transaction history (renamed from Transaction)
-model SubscriptionTransaction {
-    id             String @id @default(cuid())
-    subscriptionId String
-
-    // Transaction details
-    type        SubscriptionTransactionType
-    amount      Decimal                       @default(0)
-    currency    String                        @default("IDR")
-    status      SubscriptionTransactionStatus @default(PENDING)
-    description String?
-
-    // Payment gateway details
-    paymentId     String? // External payment ID
-    paymentMethod String? // e.g., "credit_card", "bank_transfer"
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    // Relations
-    subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-    @@map("subscription_transactions")
-}
-
 // Unified Transaction model for frontend billing page
 model Transaction {
     id          String            @id @default(cuid())
@@ -209,12 +201,17 @@ model Transaction {
     // Invoice relation
     invoiceId String?
 
+    // NEW: Direct subscription relation
+    subscriptionId String?
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     // Relations
-    user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    invoice Invoice? @relation(fields: [invoiceId], references: [id])
+    user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    invoice      Invoice?      @relation(fields: [invoiceId], references: [id])
+    // NEW: Direct relation to subscription
+    subscription Subscription? @relation("SubscriptionTransactions", fields: [subscriptionId], references: [id], onDelete: SetNull)
 
     @@map("transactions")
 }
@@ -469,6 +466,7 @@ enum PodStatus {
     UNKNOWN
     RESTARTING
     STOPPED
+    RESETTING
 }
 
 // New unified transaction enums
@@ -487,21 +485,6 @@ enum TransactionStatus {
     EXPIRED // Payment expired
 }
 
-// Subscription-specific transaction enums (renamed from original)
-enum SubscriptionTransactionType {
-    SUBSCRIPTION
-    RENEWAL
-    REFUND
-    CREDIT
-}
-
-enum SubscriptionTransactionStatus {
-    PENDING
-    COMPLETED
-    FAILED
-    CANCELLED
-}
-
 enum WebhookStatus {
     PENDING
     DELIVERED
@@ -515,4 +498,94 @@ enum NodeStatus {
     INACTIVE
     MAINTENANCE
     NOT_READY
+}
+
+// Plan change tracking for subscription upgrades/downgrades
+model SubscriptionPlanChange {
+    id             String                 @id @default(cuid())
+    subscriptionId String
+    fromServiceId  String
+    toServiceId    String
+    changeType     SubscriptionChangeType
+    status         PlanChangeStatus       @default(PENDING)
+
+    // Financial details
+    proratedAmount Decimal  @db.Decimal(10, 2)
+    refundAmount   Decimal? @db.Decimal(10, 2)
+    chargeAmount   Decimal? @db.Decimal(10, 2)
+
+    // Metadata
+    initiatedBy   String // User ID who initiated the change
+    reason        String? // Optional reason for change
+    failureReason String? // Reason for failure if status is FAILED
+
+    // Timestamps
+    initiatedAt  DateTime  @default(now())
+    completedAt  DateTime?
+    rolledBackAt DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    subscription Subscription         @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+    fromService  ServiceCatalog       @relation("PlanChangeFromService", fields: [fromServiceId], references: [id])
+    toService    ServiceCatalog       @relation("PlanChangeToService", fields: [toServiceId], references: [id])
+    initiator    User                 @relation(fields: [initiatedBy], references: [id])
+    calculation  ProratedCalculation?
+
+    @@map("subscription_plan_changes")
+}
+
+// Prorated billing calculations for plan changes
+model ProratedCalculation {
+    id             String @id @default(cuid())
+    planChangeId   String @unique
+    subscriptionId String
+
+    // Plan pricing
+    oldPlanPrice Decimal @db.Decimal(10, 2)
+    newPlanPrice Decimal @db.Decimal(10, 2)
+
+    // Time calculations
+    remainingDays Int
+    totalDays     Int
+
+    // Financial calculations
+    unusedAmount      Decimal @db.Decimal(10, 2) // Unused amount from current plan
+    proratedNewAmount Decimal @db.Decimal(10, 2) // Prorated amount for new plan
+    netAmount         Decimal @db.Decimal(10, 2) // Final amount to charge/refund
+
+    // Calculation metadata
+    calculationDate   DateTime @default(now())
+    billingCycleStart DateTime
+    billingCycleEnd   DateTime
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    planChange   SubscriptionPlanChange @relation(fields: [planChangeId], references: [id], onDelete: Cascade)
+    subscription Subscription           @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+    @@map("prorated_calculations")
+}
+
+// New enums for plan changes
+enum SubscriptionChangeType {
+    UPGRADE
+    DOWNGRADE
+    PLAN_CHANGE // For lateral moves (same price, different features)
+}
+
+enum PlanChangeStatus {
+    PENDING
+    CALCULATING
+    PAYMENT_REQUIRED
+    PROCESSING
+    MIGRATING_RESOURCES
+    COMPLETED
+    FAILED
+    ROLLED_BACK
+    CANCELLED
 }

@@ -30,6 +30,7 @@ export const notificationJobs = {
           "send-expiry-warning": this.sendExpiryWarning,
           "send-subscription-expired": this.sendSubscriptionExpired,
           "send-pod-restart-notification": this.sendPodRestartNotification,
+          "send-pod-reset-notification": this.sendPodResetNotification,
           "send-payment-confirmation": this.sendPaymentConfirmation,
           "send-low-balance-warning": this.sendLowBalanceWarning,
         },
@@ -344,6 +345,105 @@ export const notificationJobs = {
   },
 
   /**
+   * Send pod reset notification job
+   */
+  async sendPodResetNotification(job) {
+    try {
+      const {
+        serviceInstanceId,
+        userEmail,
+        serviceName,
+        resetReason = "Pod reset requested",
+      } = job.data;
+
+      logger.info(`Sending pod reset notification for ${serviceInstanceId}`);
+
+      // Get service instance and user details
+      const serviceInstance = await prisma.serviceInstance.findUnique({
+        where: { id: serviceInstanceId },
+        include: {
+          subscription: {
+            include: {
+              user: {
+                select: { id: true, name: true, email: true },
+              },
+              service: {
+                select: { id: true, name: true, displayName: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!serviceInstance) {
+        throw new Error(`Service instance ${serviceInstanceId} not found`);
+      }
+
+      const user = serviceInstance.subscription.user;
+      const service = serviceInstance.subscription.service;
+
+      // Send pod reset notification email
+      await notificationService.sendEmail({
+        to: user.email,
+        subject: `🔄 Service Reset Complete - ${service.displayName}`,
+        template: "pod-reset-notification",
+        data: {
+          title: "Service Reset Complete",
+          userName: user.name,
+          serviceName: service.displayName || service.name,
+          resetReason,
+          resetCount: serviceInstance.resetCount || 1,
+          externalUrl: serviceInstance.externalUrl,
+          dashboardUrl: `${process.env.FRONTEND_URL}/dashboard`,
+          content: `
+            <h2>🔄 Your Service Has Been Reset</h2>
+            <p>Hi ${user.name},</p>
+            <p>Your <strong>${
+              service.displayName || service.name
+            }</strong> service has been successfully reset with a fresh configuration.</p>
+            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p><strong>Service:</strong> ${
+                service.displayName || service.name
+              }</p>
+              <p><strong>Reset Reason:</strong> ${resetReason}</p>
+              <p><strong>Reset Count:</strong> ${
+                serviceInstance.resetCount || 1
+              }</p>
+              <p><strong>Status:</strong> Your service is being recreated and will be available shortly</p>
+            </div>
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p><strong>⚠️ Important:</strong> All previous data and custom configurations have been cleared. Your service now has a fresh, clean state.</p>
+            </div>
+            <p>Your service will be available at the same URL once the reset is complete (usually within 2-5 minutes).</p>
+            ${
+              serviceInstance.externalUrl
+                ? `<p><strong>Service URL:</strong> <a href="${serviceInstance.externalUrl}">${serviceInstance.externalUrl}</a></p>`
+                : ""
+            }
+            <p><a href="${
+              process.env.FRONTEND_URL
+            }/dashboard" class="button">View Dashboard</a></p>
+            <p>If you continue to experience issues, please contact our support team.</p>
+          `,
+        },
+      });
+
+      logger.info(`Pod reset notification sent for ${serviceInstanceId}`);
+      return {
+        success: true,
+        serviceInstanceId,
+        recipient: user.email,
+      };
+    } catch (error) {
+      logger.error(
+        `Failed to send pod reset notification for ${job.data.serviceInstanceId}:`,
+        error
+      );
+      throw error;
+    }
+  },
+
+  /**
    * Send payment confirmation job
    */
   async sendPaymentConfirmation(job) {
@@ -568,6 +668,31 @@ export const notificationJobs = {
     } catch (error) {
       logger.error(
         `Failed to queue low balance warning for user ${userId}:`,
+        error
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Queue pod reset notification
+   */
+  async queuePodReset(serviceInstanceId, resetData) {
+    try {
+      await queueManager.addJob(
+        "notification-jobs",
+        "send-pod-reset-notification",
+        {
+          serviceInstanceId,
+          ...resetData,
+        },
+        { priority: 8 }
+      );
+
+      logger.info(`Queued pod reset notification for ${serviceInstanceId}`);
+    } catch (error) {
+      logger.error(
+        `Failed to queue pod reset notification for ${serviceInstanceId}:`,
         error
       );
       throw error;

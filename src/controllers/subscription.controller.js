@@ -1,4 +1,5 @@
 import * as subscriptionService from "../services/subscription.service.js";
+import * as podService from "../services/pod.service.js";
 import { success, error } from "../utils/response.util.js";
 import HTTP_STATUS from "../utils/http-status.util.js";
 import logger from "../utils/logger.util.js";
@@ -203,17 +204,20 @@ const cancelSubscription = async (req, res) => {
 };
 
 /**
- * Update subscription
+ * Update subscription (User-facing - LIMITED)
  * @route PUT /api/v1/subscriptions/:id
  * @access Private
+ * @note Users can only update autoRenew and customConfig - NOT status
  */
 const updateSubscription = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { status, autoRenew, customConfig } = req.body;
+    const { autoRenew, customConfig } = req.body;
 
-    logger.info(`Updating subscription ${id} for user ${userId}`);
+    logger.info(
+      `User ${userId} updating subscription ${id} (limited fields only)`
+    );
 
     // Get current subscription to verify ownership
     const currentSubscription =
@@ -223,16 +227,26 @@ const updateSubscription = async (req, res) => {
       return res.json(error("Subscription not found"));
     }
 
-    // For now, we'll implement basic status updates
-    // More complex updates can be added later
+    // Users can only update these safe fields:
     const updateData = {};
 
-    if (status && ["ACTIVE", "SUSPENDED"].includes(status)) {
-      updateData.status = status;
+    if (autoRenew !== undefined) {
+      updateData.autoRenew = autoRenew;
     }
 
-    // Note: This is a simplified update. In a full implementation,
-    // you might want to add more sophisticated update logic
+    if (customConfig !== undefined) {
+      updateData.customConfig = customConfig;
+    }
+
+    // If no valid fields to update
+    if (Object.keys(updateData).length === 0) {
+      return res.json(error("No valid fields provided for update"));
+    }
+
+    // TODO: Implement actual update logic in service
+    // For now, just return the current subscription
+    logger.info(`User update data for subscription ${id}:`, updateData);
+
     const updatedSubscription =
       await subscriptionService.getSubscriptionDetails(id, userId);
 
@@ -455,6 +469,128 @@ const getAdminSubscriptionStats = async (req, res) => {
   }
 };
 
+/**
+ * Reset subscription pod (User-facing)
+ * @route POST /api/v1/subscriptions/:id/reset-pod
+ * @access Private
+ */
+const resetSubscriptionPod = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    logger.info(`User ${userId} requesting pod reset for subscription ${id}`);
+
+    const resetResult = await podService.userResetPod(id, userId);
+
+    logger.info(
+      `Successfully reset pod for subscription ${id} by user ${userId}`
+    );
+
+    res.json(success(resetResult, "Pod reset completed successfully"));
+  } catch (err) {
+    logger.error("Error resetting subscription pod:", err);
+
+    if (err.message.includes("not found")) {
+      return res.json(error("Subscription not found"));
+    }
+
+    if (err.message.includes("Access denied")) {
+      return res.json(error("Access denied - not your subscription"));
+    }
+
+    if (err.message.includes("No active service instance")) {
+      return res.json(error("No active service instance found"));
+    }
+
+    if (err.message.includes("must be ACTIVE or EXPIRED")) {
+      return res.json(
+        error("Subscription must be active or expired to reset pod")
+      );
+    }
+
+    if (err.message.includes("cannot be reset in current state")) {
+      return res.json(error(err.message));
+    }
+
+    if (err.message.includes("Kubernetes client not ready")) {
+      return res.json(error("Service temporarily unavailable"));
+    }
+
+    res.json(error("Failed to reset pod"));
+  }
+};
+
+/**
+ * Restart subscription pod (User-facing)
+ * @route POST /api/v1/subscriptions/:id/restart-pod
+ * @access Private
+ */
+const restartSubscriptionPod = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    logger.info(`User ${userId} requesting pod restart for subscription ${id}`);
+
+    // Get subscription with service instance
+    const subscription = await subscriptionService.getSubscriptionDetails(
+      id,
+      userId
+    );
+
+    if (!subscription) {
+      return res.json(error("Subscription not found"));
+    }
+
+    if (!subscription.serviceInstance) {
+      return res.json(error("No active service instance found"));
+    }
+
+    // Check if subscription is in a restartable state
+    if (!["ACTIVE", "EXPIRED"].includes(subscription.status)) {
+      return res.json(
+        error("Subscription must be active or expired to restart pod")
+      );
+    }
+
+    // Restart the pod
+    await podService.restartPod(subscription.serviceInstance.id);
+
+    logger.info(
+      `Successfully restarted pod for subscription ${id} by user ${userId}`
+    );
+
+    res.json(
+      success(
+        {
+          subscriptionId: id,
+          podId: subscription.serviceInstance.id,
+          message: "Pod restart initiated successfully",
+          restartedAt: new Date(),
+        },
+        "Pod restart completed successfully"
+      )
+    );
+  } catch (err) {
+    logger.error("Error restarting subscription pod:", err);
+
+    if (err.message.includes("not found")) {
+      return res.json(error("Subscription not found"));
+    }
+
+    if (err.message.includes("cannot be restarted")) {
+      return res.json(error(err.message));
+    }
+
+    if (err.message.includes("Kubernetes client not ready")) {
+      return res.json(error("Service temporarily unavailable"));
+    }
+
+    res.json(error("Failed to restart pod"));
+  }
+};
+
 export {
   createSubscription,
   getUserSubscriptions,
@@ -467,4 +603,6 @@ export {
   getSubscriptionStats,
   getAllSubscriptions,
   getAdminSubscriptionStats,
+  resetSubscriptionPod,
+  restartSubscriptionPod,
 };

@@ -1,5 +1,5 @@
 @baseUrl = http://localhost:3000/api/v1
-@podId = {{{{get_all_response.response.body.data.pods[0].id}}}}
+@podId = {{get_all_response.response.body.data.pods[0].id}}
 @authToken = {{login_response.response.body.data.tokens.accessToken}}
 ### Login to get access token
 # @name login_response
@@ -62,6 +62,14 @@ DELETE {{baseUrl}}/admin/pods/{{podId}}
 Authorization: Bearer {{authToken}}
 
 ### Admin - Pod management action
+POST {{baseUrl}}/admin/pods/cmdirmzxi000yyhiigp2iimxq/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "stop"
+}
+### Admin - Pod management action
 POST {{baseUrl}}/admin/pods/{{podId}}/action
 Authorization: Bearer {{authToken}}
 Content-Type: application/json
@@ -69,3 +77,149 @@ Content-Type: application/json
 {
   "action": "restart"
 }
+
+### Admin - Reset any pod (NEW)
+POST {{baseUrl}}/admin/pods/{{podId}}/reset
+Authorization: Bearer {{authToken}}
+
+### Admin - Pod management action with reset (NEW)
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "reset"
+}
+
+### Admin - Pod management action with start
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "start"
+}
+
+### ========================================
+### ADMIN POD RESET TESTING SCENARIOS
+### ========================================
+
+### Scenario 1: Test Admin Reset Pod (Direct Endpoint)
+# 1. First, get a pod ID from the list
+GET {{baseUrl}}/admin/pods
+Authorization: Bearer {{authToken}}
+
+### 2. Reset the pod using direct endpoint
+POST {{baseUrl}}/admin/pods/YOUR_POD_ID_HERE/reset
+Authorization: Bearer {{authToken}}
+
+### 3. Check pod status after reset
+GET {{baseUrl}}/admin/pods/YOUR_POD_ID_HERE
+Authorization: Bearer {{authToken}}
+
+### Scenario 2: Test Admin Reset Pod (Action Endpoint)
+# 1. Reset the pod using action endpoint
+POST {{baseUrl}}/admin/pods/YOUR_POD_ID_HERE/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "reset"
+}
+
+### 2. Check all pods to see the reset status
+GET {{baseUrl}}/admin/pods
+Authorization: Bearer {{authToken}}
+
+### ========================================
+### COMPLETE POD LIFECYCLE TESTING
+### ========================================
+
+### Test 1: Stop Pod
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "stop"
+}
+
+### Test 2: Start Pod
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "start"
+}
+
+### Test 3: Restart Pod
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "restart"
+}
+
+### Test 4: Reset Pod (NEW)
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "reset"
+}
+
+### Test 5: Delete Pod
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "delete"
+}
+
+### ========================================
+### ERROR TESTING SCENARIOS
+### ========================================
+
+### Test 1: Try to reset non-existent pod
+POST {{baseUrl}}/admin/pods/invalid-pod-id/reset
+Authorization: Bearer {{authToken}}
+
+### Test 2: Try invalid action
+POST {{baseUrl}}/admin/pods/{{podId}}/action
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "invalid_action"
+}
+
+### ========================================
+### NOTES FOR ADMIN POD RESET TESTING:
+### ========================================
+# 1. Admin Reset Pod Features:
+#    - Can reset any user's pod
+#    - Completely destroys and recreates pod
+#    - Clears all data and configurations
+#    - Sends notification to pod owner
+#    - Available via direct endpoint or action endpoint
+#
+# 2. Expected Flow for Admin Reset:
+#    - Admin requests reset → Pod status: RESETTING
+#    - Old pod destroyed → New pod created from template
+#    - Pod becomes RUNNING → Owner notified via email
+#    - Admin can see reset count and details
+#
+# 3. Available Actions:
+#    - restart: Restart with current config
+#    - stop: Scale to 0 replicas
+#    - start: Scale back to 1 replica
+#    - reset: Complete recreation (NEW)
+#    - delete: Permanent removal
+#
+# 4. Reset vs Restart:
+#    - Reset: Destroys everything, fresh start
+#    - Restart: Keeps config, just restarts process

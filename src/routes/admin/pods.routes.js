@@ -5,6 +5,7 @@ import {
   getPodStats,
   getAdminPodLogs,
   adminRestartPod,
+  adminResetPod,
   deletePod,
   getAdminPodDetails,
   adminPodAction,
@@ -175,6 +176,19 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/admin/pods/:id/reset
+ * @desc    Reset any user's pod (Admin only)
+ * @access  Private (Admin only)
+ */
+router.post(
+  "/:id/reset",
+  adminOnly,
+  [param("id").isString().notEmpty().withMessage("Pod ID is required")],
+  handleValidationErrors,
+  adminResetPod
+);
+
+/**
  * @route   DELETE /api/v1/admin/pods/:id
  * @desc    Delete any user's pod (Admin only)
  * @access  Private (Admin only)
@@ -198,8 +212,10 @@ router.post(
   [
     param("id").isString().notEmpty().withMessage("Pod ID is required"),
     body("action")
-      .isIn(["restart", "stop", "delete"])
-      .withMessage("Action must be one of: restart, stop, delete"),
+      .isIn(["restart", "stop", "start", "delete", "reset"])
+      .withMessage(
+        "Action must be one of: restart, stop, start, delete, reset"
+      ),
   ],
   handleValidationErrors,
   adminPodAction

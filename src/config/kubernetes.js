@@ -12,6 +12,7 @@ class KubernetesConfig {
     this.coreV1Api = null;
     this.appsV1Api = null;
     this.networkingV1Api = null;
+    this.metricsV1beta1Api = null;
     this.isConnected = false;
     this.mockMode = !this.kubernetesEnabled;
   }
@@ -47,6 +48,17 @@ class KubernetesConfig {
       this.coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);
       this.appsV1Api = this.kc.makeApiClient(k8s.AppsV1Api);
       this.networkingV1Api = this.kc.makeApiClient(k8s.NetworkingV1Api);
+
+      // Initialize metrics API client (optional - may not be available)
+      try {
+        // The metrics API is typically available at /apis/metrics.k8s.io/v1beta1
+        // We'll create a custom API client for metrics
+        this.metricsV1beta1Api = this.kc.makeApiClient(k8s.CustomObjectsApi);
+        logger.info("Metrics API client initialized (using CustomObjectsApi)");
+      } catch (error) {
+        logger.warn("Metrics API client initialization failed:", error.message);
+        this.metricsV1beta1Api = null;
+      }
 
       // Test connection
       await this.testConnection();
@@ -111,6 +123,23 @@ class KubernetesConfig {
       );
     }
     return this.networkingV1Api;
+  }
+
+  /**
+   * Get Metrics V1beta1 API client
+   */
+  getMetricsV1beta1Api() {
+    if (!this.isConnected) {
+      throw new Error(
+        "Kubernetes client not initialized. Call initialize() first."
+      );
+    }
+    if (!this.metricsV1beta1Api) {
+      throw new Error(
+        "Kubernetes metrics API not available. Metrics server may not be installed."
+      );
+    }
+    return this.metricsV1beta1Api;
   }
 
   /**

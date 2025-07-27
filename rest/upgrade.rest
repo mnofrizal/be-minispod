@@ -1,0 +1,368 @@
+### Upgrade Subscription API Testing
+### Base URL: http://localhost:3000/api/v1
+
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@authToken = {{login_response.response.body.data.tokens.accessToken}}
+@subscriptionId = cmdjrmph9000izoy7uakxfbcz
+@newServiceId = cmdjrmph9000izoy7uakxfbcz
+
+### Variables for admin token
+@adminToken = {{admin_login_response.response.body.data.tokens.accessToken}}
+
+
+### Login to get access token (Regular User)
+# @name login_response
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "customer@test.com",
+  "password": "Customer123!@#"
+}
+
+### Login to get admin access token
+# @name admin_login_response
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+### Get User Subscriptions
+GET {{baseUrl}}/subscriptions
+Authorization: Bearer {{authToken}}
+
+### 1. Get Upgrade Options
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/upgrade-options
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### 2. Validate Upgrade Eligibility
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{newServiceId}}"
+}
+
+###
+
+### 3. Calculate Upgrade Cost
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/calculate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{newServiceId}}"
+}
+
+###
+
+### 4. Get Plan Change History
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/plan-changes
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### 5. Get Plan Change History with Filters
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/plan-changes?page=1&limit=5&status=COMPLETED&changeType=UPGRADE
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Example Test Scenarios
+
+### Scenario 1: N8N Basic to N8N Plus Upgrade
+@n8nBasicSubscriptionId = clm1234567890abcdef123
+@n8nPlusServiceId = clm0987654321fedcba098
+
+### Get N8N upgrade options
+GET {{baseUrl}}/subscriptions/{{n8nBasicSubscriptionId}}/upgrade-options
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Validate N8N Basic to Plus upgrade
+POST {{baseUrl}}/subscriptions/{{n8nBasicSubscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{n8nPlusServiceId}}"
+}
+
+###
+
+### Calculate N8N upgrade cost
+POST {{baseUrl}}/subscriptions/{{n8nBasicSubscriptionId}}/calculate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{n8nPlusServiceId}}"
+}
+
+###
+
+### Execute N8N Basic to Plus upgrade
+POST {{baseUrl}}/subscriptions/{{n8nBasicSubscriptionId}}/upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{n8nPlusServiceId}}",
+  "reason": "Need more automation workflows",
+  "confirmPayment": true
+}
+
+###
+
+### 6. Execute Upgrade (After validation and calculation)
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{newServiceIdf}}",
+  "reason": "Upgrading for better performance",
+  "confirmPayment": true
+}
+
+###
+
+
+
+### Scenario 3: Error Cases
+
+### Invalid subscription ID
+GET {{baseUrl}}/subscriptions/invalid-id/upgrade-options
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Invalid service ID for upgrade
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "invalid-service-id"
+}
+
+###
+
+### Missing required fields
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "invalidField": "test"
+}
+
+###
+
+### Scenario 4: Role-Based Access Control
+
+### Regular User - Should only see UPGRADE options (no downgrades)
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/upgrade-options
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Admin User - Should see ALL options including downgrades
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/upgrade-options
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+###
+
+### Regular User - Downgrade endpoint should be FORBIDDEN
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/downgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{newServiceId}}",
+  "reason": "User attempting downgrade",
+  "confirmDowngrade": true
+}
+
+###
+
+### Admin User - Downgrade endpoint should work
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/downgrade
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{newServiceId}}",
+  "reason": "Admin performing downgrade",
+  "confirmDowngrade": true
+}
+
+###
+
+### Scenario 5: Downgrade Cases (Admin Only)
+
+### WordPress Pro to WordPress Basic (Downgrade) - Admin Only
+@wordpressProSubscriptionId = clm3456789012cdefgh345
+@wordpressBasicServiceId = clm2109876543hgfedcb210
+
+### Validate WordPress Pro to Basic downgrade (Admin)
+POST {{baseUrl}}/subscriptions/{{wordpressProSubscriptionId}}/validate-upgrade
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{wordpressBasicServiceId}}"
+}
+
+###
+
+### Calculate WordPress downgrade refund (Admin)
+POST {{baseUrl}}/subscriptions/{{wordpressProSubscriptionId}}/calculate-upgrade
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{wordpressBasicServiceId}}"
+}
+
+###
+
+### Execute WordPress downgrade (Admin Only)
+POST {{baseUrl}}/subscriptions/{{wordpressProSubscriptionId}}/downgrade
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{wordpressBasicServiceId}}",
+  "reason": "Admin downgrade for cost optimization",
+  "confirmDowngrade": true
+}
+
+###
+
+### Scenario 5: Same Service (Should Fail)
+
+### Try to "upgrade" to same service
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{subscriptionId}}"
+}
+
+###
+
+### Scenario 6: Insufficient Balance
+
+### Test upgrade when user has insufficient balance
+### (This would require a subscription with high-cost target service)
+@expensiveServiceId = clm4567890123defghi456
+
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{expensiveServiceId}}"
+}
+
+###
+
+### Scenario 7: Plan Change History Pagination
+
+### Get first page of plan changes
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/plan-changes?page=1&limit=3
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Get second page of plan changes
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/plan-changes?page=2&limit=3
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Filter by status
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/plan-changes?status=COMPLETED
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Filter by change type
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/plan-changes?changeType=UPGRADE
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Combined filters
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/plan-changes?status=COMPLETED&changeType=UPGRADE&page=1&limit=5
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### Scenario 8: Authentication Tests
+
+### Test without authentication token
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/upgrade-options
+Content-Type: application/json
+
+###
+
+### Test with invalid authentication token
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}/upgrade-options
+Authorization: Bearer invalid-token
+Content-Type: application/json
+
+###
+
+### Scenario 9: Cross-Service Type Validation
+
+### Try to upgrade N8N to Ghost (should fail - different service types)
+@n8nSubscriptionId = clm5678901234efghij567
+@ghostServiceId = clm3210987654ihgfedcb321
+
+POST {{baseUrl}}/subscriptions/{{n8nSubscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{ghostServiceId}}"
+}
+
+###
+
+### Scenario 10: Inactive Service Validation
+
+### Try to upgrade to inactive service (should fail)
+@inactiveServiceId = clm6789012345fghijk678
+
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/validate-upgrade
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "newServiceId": "{{inactiveServiceId}}"
+}
+
+###

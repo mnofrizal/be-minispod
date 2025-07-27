@@ -26,7 +26,7 @@ Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 ### 3. Get Transaction Details (Admin) - Any User's Transaction
-GET {{baseUrl}}/admin/billing/transactions/cm3abc123def456ghi789jkl
+GET {{baseUrl}}/admin/billing/transactions/cmdj39bbw000811st9nm705dc
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 

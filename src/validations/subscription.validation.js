@@ -44,16 +44,10 @@ export const renewSubscriptionSchema = Joi.object({
 });
 
 /**
- * Validation schema for updating subscription
+ * Validation schema for updating subscription (User-facing)
+ * Note: Status updates are NOT allowed for users - only admins can change status
  */
 export const updateSubscriptionSchema = Joi.object({
-  status: Joi.string()
-    .valid("ACTIVE", "SUSPENDED", "CANCELLED")
-    .optional()
-    .messages({
-      "any.only": "Status must be one of: ACTIVE, SUSPENDED, CANCELLED",
-    }),
-
   autoRenew: Joi.boolean().optional().messages({
     "boolean.base": "Auto renew must be a boolean value",
   }),

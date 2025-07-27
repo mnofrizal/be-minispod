@@ -12,6 +12,7 @@ import adminUserRoutes from "./admin/users.routes.js";
 import adminWorkerRoutes from "./admin/workers.routes.js";
 import adminPodRoutes from "./admin/pods.routes.js";
 import adminBillingRoutes from "./admin/billing.routes.js";
+import adminSubscriptionRoutes from "./admin/subscriptions.routes.js";
 
 const router = express.Router();
 
@@ -30,6 +31,7 @@ router.use("/admin/users", adminUserRoutes);
 router.use("/admin/workers", adminWorkerRoutes);
 router.use("/admin/pods", adminPodRoutes);
 router.use("/admin/billing", adminBillingRoutes);
+router.use("/admin/subscriptions", adminSubscriptionRoutes);
 
 /**
  * API status endpoint
@@ -58,8 +60,9 @@ router.get("/status", (req, res) => {
         "admin/workers",
         "admin/pods",
         "admin/billing",
+        "admin/subscriptions",
       ],
-      total_endpoints: "20+ user endpoints, 30+ admin endpoints",
+      total_endpoints: "20+ user endpoints, 40+ admin endpoints",
     },
   };
 

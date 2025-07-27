@@ -2,7 +2,7 @@
 ### Test the reorganized admin route structure
 
 @baseUrl = http://localhost:3000/api/v1
-@adminToken = your-admin-jwt-token-here
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRpeGcydWwwMDA1bjlldnFiaTN4MnZ4IiwiZW1haWwiOiJhZG1pbkBwYWFzLmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzNDU5MzgzLCJleHAiOjE3NTM1NDU3ODMsImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.TSsvL3bAKxZf4O1n3UBGEV13LXQjcU3bsXumWppH-dQ
 
 ### Test Admin User Routes
 GET {{baseUrl}}/admin/users

@@ -1,7 +1,7 @@
 ### Subscription API Testing
 
 @baseUrl = http://localhost:3000/api/v1
-@authToken = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRneWk4M3AwMDA2OXlhaDA4c3NnaDRyIiwiZW1haWwiOiJjdXN0b21lckB0ZXN0LmNvbSIsInJvbGUiOiJVU0VSIiwiaWF0IjoxNzUzNDEwMzc5LCJleHAiOjE3NTM0OTY3NzksImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.0dhcqiGGsVjrAdbf2iQyfVSwpQ7FrvSiz8-VQy4dJvw
+@authToken = Bearer {{login_response.response.body.data.tokens.accessToken}}
 ### Login to get access token
 # @name login_response
 POST {{baseUrl}}/auth/login
@@ -78,3 +78,154 @@ Authorization: {{authToken}}
 ### Admin: Get Subscription Stats
 GET {{baseUrl}}/subscriptions/admin/stats
 Authorization: {{authToken}}
+
+### ========================================
+### NEW SUBSCRIPTION LIFECYCLE FLOW TESTING
+### ========================================
+
+### Test 1: Create Subscription (Should start as PENDING_DEPLOYMENT)
+# @name create_subscription_test
+POST {{baseUrl}}/subscriptions
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "serviceId": "cmdg67pz00000qusdf2df2df"
+}
+
+### Test 2: Check Subscription Status Immediately After Creation
+# Should show PENDING_DEPLOYMENT status
+GET {{baseUrl}}/subscriptions
+Authorization: {{authToken}}
+
+### Test 3: Wait and Check Status Again (After Pod Creation)
+# Should show ACTIVE status once pod is running
+# Wait 30-60 seconds after subscription creation, then run this
+GET {{baseUrl}}/subscriptions
+Authorization: {{authToken}}
+
+### Test 4: Admin View - Check Subscription Status
+# Admin can see the subscription status transition
+GET {{baseUrl}}/admin/subscriptions
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRneWk4M3AwMDA2OXlhaDA4c3NnaDRyIiwiZW1haWwiOiJhZG1pbkB0ZXN0LmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzNDEwMzc5LCJleHAiOjE3NTM0OTY3NzksImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.adminTokenHere
+
+### Test 5: Admin View - Check Pod Status
+# Admin can see the pod status that corresponds to subscription
+GET {{baseUrl}}/admin/pods
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRneWk4M3AwMDA2OXlhaDA4c3NnaDRyIiwiZW1haWwiOiJhZG1pbkB0ZXN0LmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzNDEwMzc5LCJleHAiOjE3NTM0OTY3NzksImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.adminTokenHere
+
+### Test 6: Test Failed Pod Scenario (Admin Only)
+# Admin can manually set subscription to PENDING_DEPLOYMENT to test retry
+PUT {{baseUrl}}/admin/subscriptions/SUBSCRIPTION_ID_HERE/status
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbWRneWk4M3AwMDA2OXlhaDA4c3NnaDRyIiwiZW1haWwiOiJhZG1pbkB0ZXN0LmNvbSIsInJvbGUiOiJBRE1JTklTVFJBVE9SIiwiaWF0IjoxNzUzNDEwMzc5LCJleHAiOjE3NTM0OTY3NzksImF1ZCI6InBhYXMtZnJvbnRlbmQiLCJpc3MiOiJwYWFzLWJhY2tlbmQifQ.adminTokenHere
+Content-Type: application/json
+
+{
+  "status": "PENDING_DEPLOYMENT"
+}
+
+### ========================================
+### EXPECTED FLOW:
+### 1. User creates subscription → Status: PENDING_DEPLOYMENT
+### 2. Pod creation starts in background
+### 3. Pod becomes RUNNING → Subscription status: ACTIVE
+### 4. User receives service ready notification
+### ========================================
+
+### Notes for Testing:
+# 1. Create subscription and immediately check status (should be PENDING_DEPLOYMENT)
+# 2. Wait 30-60 seconds for pod to be created and become running
+# 3. Check status again (should be ACTIVE)
+# 4. Check admin pod view to see pod status
+# 5. Verify email notification was sent when service became ready
+
+### ========================================
+### POD MANAGEMENT ENDPOINTS (USER)
+### ========================================
+
+### Reset Subscription Pod (User)
+# Completely destroys and recreates the pod with fresh configuration
+# Use when the pod is broken and needs a clean start
+POST {{baseUrl}}/subscriptions/cmdjsj8e600039z1s9bhdzz01/reset-pod
+Authorization: {{authToken}}
+Content-Type: application/json
+
+### Restart Subscription Pod (User)
+# Restarts the pod with current configuration
+# Use for normal restart needs
+POST {{baseUrl}}/subscriptions/cmdjsj8e600039z1s9bhdzz01/restart-pod
+Authorization: {{authToken}}
+Content-Type: application/json
+
+### ========================================
+### POD MANAGEMENT TESTING SCENARIOS
+### ========================================
+
+### Scenario 1: Test Reset Pod (User)
+# 1. First, get your subscription ID from the list
+GET {{baseUrl}}/subscriptions
+Authorization: {{authToken}}
+
+### 2. Reset the pod (replace with actual subscription ID)
+POST {{baseUrl}}/subscriptions/YOUR_SUBSCRIPTION_ID_HERE/reset-pod
+Authorization: {{authToken}}
+Content-Type: application/json
+
+### 3. Check subscription status after reset (should show RESETTING then PENDING)
+GET {{baseUrl}}/subscriptions
+Authorization: {{authToken}}
+
+### Scenario 2: Test Restart Pod (User)
+# 1. Restart the pod (replace with actual subscription ID)
+POST {{baseUrl}}/subscriptions/YOUR_SUBSCRIPTION_ID_HERE/restart-pod
+Authorization: {{authToken}}
+Content-Type: application/json
+
+### 2. Check subscription status after restart
+GET {{baseUrl}}/subscriptions
+Authorization: {{authToken}}
+
+### ========================================
+### ERROR TESTING SCENARIOS
+### ========================================
+
+### Test 1: Try to reset non-existent subscription
+POST {{baseUrl}}/subscriptions/invalid-subscription-id/reset-pod
+Authorization: {{authToken}}
+Content-Type: application/json
+
+### Test 2: Try to reset another user's subscription (should fail)
+POST {{baseUrl}}/subscriptions/OTHER_USER_SUBSCRIPTION_ID/reset-pod
+Authorization: {{authToken}}
+Content-Type: application/json
+
+### Test 3: Try to restart non-existent subscription
+POST {{baseUrl}}/subscriptions/invalid-subscription-id/restart-pod
+Authorization: {{authToken}}
+Content-Type: application/json
+
+### ========================================
+### NOTES FOR POD MANAGEMENT TESTING:
+### ========================================
+# 1. Reset Pod:
+#    - Completely destroys current pod and data
+#    - Creates fresh pod from service template
+#    - Clears any custom configurations
+#    - Sends email notification to user
+#    - Use when pod is broken/corrupted
+#
+# 2. Restart Pod:
+#    - Restarts pod with current configuration
+#    - Preserves data and settings
+#    - Use for normal restart needs
+#
+# 3. Expected Flow for Reset:
+#    - User requests reset → Pod status: RESETTING
+#    - Old pod destroyed → New pod created
+#    - Pod becomes RUNNING → Subscription: ACTIVE
+#    - User receives reset notification email
+#
+# 4. Expected Flow for Restart:
+#    - User requests restart → Pod status: RESTARTING
+#    - Pod restarts with same config
+#    - Pod becomes RUNNING → Subscription: ACTIVE
