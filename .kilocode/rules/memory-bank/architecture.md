@@ -25,7 +25,7 @@ The backend is designed as a **microservices-oriented monolith** using Express.j
 - **Local Development**: Complete k3d integration with auto-registration and heartbeat scripts
 - **Production Deployment**: Kubernetes DaemonSet for automatic worker node agents
 - **Kubernetes Integration**: Full @kubernetes/client-node integration with pod lifecycle management
-- **Pod Management System**: Complete pod provisioning, monitoring, restart, stop, start, and cleanup with service templates, container port management, and local development access
+- **Pod Management System**: Complete pod provisioning, monitoring, restart, stop, start, reset, and cleanup with service templates, container port management, and local development access
 - **Service Templates**: Pre-configured templates for N8N, Ghost, and WordPress with dynamic configuration
 - **Email Notification System**: Complete email system with HTML templates and queue-based delivery
 - **Monitoring Integration**: Prometheus and Grafana setup for production monitoring
@@ -41,8 +41,9 @@ src/
 │   ├── service.controller.js    # ✅ Service catalog handlers
 │   ├── worker.controller.js     # ✅ Worker node management with ID/name resolution
 │   ├── billing.controller.js    # ✅ Billing operations (balance, top-up, invoices, unified transactions)
-│   ├── subscription.controller.js # ✅ Subscription lifecycle management
-│   └── pod.controller.js        # ✅ Pod management with Kubernetes integration
+│   ├── subscription.controller.js # ✅ Subscription lifecycle management with pod reset/restart functionality
+│   ├── upgrade.controller.js     # 📋 Subscription upgrade/downgrade functionality (planned)
+│   └── pod.controller.js        # ✅ Pod management with Kubernetes integration and admin reset functionality
 ├── middleware/
 │   ├── auth.middleware.js       # ✅ JWT authentication & authorization
 │   ├── error.middleware.js      # ✅ Global error handling
@@ -52,7 +53,8 @@ src/
 │   ├── auth.routes.js          # ✅ Authentication endpoints
 │   ├── services.routes.js      # ✅ Service catalog with validation
 │   ├── billing.routes.js       # ✅ Billing system endpoints with unified transactions
-│   ├── subscriptions.routes.js # ✅ Subscription management with credit-based flow
+│   ├── subscriptions.routes.js # ✅ Subscription management with credit-based flow and pod reset/restart endpoints
+│   ├── upgrade.routes.js       # 📋 Subscription upgrade/downgrade endpoints (planned)
 │   └── admin/                  # ✅ Admin-only endpoints with proper security boundaries
 │       ├── users.routes.js     # ✅ Admin user management with validation
 │       ├── workers.routes.js   # ✅ Admin worker node management with flexible validation
@@ -67,6 +69,7 @@ src/
 │   ├── midtrans.service.js     # ✅ Midtrans payment gateway integration
 │   ├── subscription.service.js # ✅ Credit-based subscription lifecycle
 │   ├── pod.service.js          # ✅ Kubernetes pod lifecycle management
+│   ├── upgrade.service.js      # 📋 Subscription upgrade/downgrade functionality (planned)
 │   └── notification.service.js # ✅ Email notification system
 ├── validations/
 │   ├── auth.validation.js      # ✅ Authentication validation schemas
@@ -74,7 +77,8 @@ src/
 │   ├── service.validation.js   # ✅ Service catalog validation schemas
 │   ├── worker.validation.js    # ✅ Worker node validation with flexible schemas
 │   ├── billing.validation.js   # ✅ Billing operations validation with CUID support
-│   └── subscription.validation.js # ✅ Subscription validation schemas
+│   ├── subscription.validation.js # ✅ Subscription validation schemas
+│   └── upgrade.validation.js   # 📋 Subscription upgrade/downgrade validation schemas (planned)
 ├── jobs/
 │   ├── job-scheduler.js        # ✅ Enhanced job scheduler with queue integration
 │   ├── queue.manager.js        # ✅ Bull queue management system
@@ -112,6 +116,7 @@ rest/
 ├── service.rest                # ✅ Service catalog API testing
 ├── billing.rest                # ✅ Billing system API testing with unified transactions
 ├── subscription.rest           # ✅ Subscription management API testing
+├── upgrade.rest                # 📋 Subscription upgrade/downgrade API testing (planned)
 ├── pod.rest                    # ✅ Admin pod management API testing
 ├── worker.rest                 # ✅ Admin worker node management API testing
 ├── admin-billing.rest          # ✅ Admin billing management API testing

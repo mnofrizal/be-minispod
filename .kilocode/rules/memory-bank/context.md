@@ -2,9 +2,15 @@
 
 ## Project Status
 
-**Phase**: Phase 2 COMPLETE - Full Kubernetes Integration with Production-Ready PaaS Platform + Complete Admin Management Systems
-**Last Updated**: 2025-07-25
-**Current Focus**: Phase 2 has been successfully completed with comprehensive Kubernetes integration, pod management, subscription lifecycle, email notifications, and production-ready worker management. Additionally, complete admin management systems have been implemented including comprehensive admin subscription management, pod management with orphaned pod cleanup functionality, and complete admin billing/transaction management. Major database architecture improvements have been made with unified transaction models and proper Prisma relations. Critical security vulnerabilities have been fixed to prevent subscription status manipulation. **LATEST ACHIEVEMENT**: Comprehensive pod metrics system with real-time CPU/memory utilization monitoring, worker node integration showing pod placement, and complete service management system understanding. The system now provides complete PaaS functionality with automated pod provisioning, real-time monitoring with metrics, user notifications, advanced admin maintenance capabilities, and full administrative oversight with proper security controls.
+**Phase**: Phase 2 COMPLETE + Advanced Pod Management Features
+**Last Updated**: 2025-07-27
+**Current Focus**: Phase 2 has been successfully completed with comprehensive Kubernetes integration, pod management, subscription lifecycle, email notifications, and production-ready worker management. Additionally, complete admin management systems have been implemented including comprehensive admin subscription management, pod management with orphaned pod cleanup functionality, and complete admin billing/transaction management. Major database architecture improvements have been made with unified transaction models and proper Prisma relations. Critical security vulnerabilities have been fixed to prevent subscription status manipulation. **LATEST ACHIEVEMENTS**:
+
+1. **Complete Reset Pod Feature** - Comprehensive pod reset functionality allowing both users and administrators to completely reset broken or corrupted pods with full data destruction and recreation from service templates
+2. **Comprehensive pod metrics system** with real-time CPU/memory utilization monitoring, worker node integration showing pod placement, and complete service management system understanding
+3. **Upgrade Subscription Feature Planning** - Detailed implementation plan for subscription upgrade/downgrade functionality with prorated billing and seamless resource migration
+
+The system now provides complete PaaS functionality with automated pod provisioning, real-time monitoring with metrics, user notifications, advanced admin maintenance capabilities, comprehensive pod reset capabilities, and full administrative oversight with proper security controls.
 
 ## Current State
 
@@ -17,7 +23,7 @@
 - **Production-Ready Worker Management**: Advanced Kubernetes worker node monitoring with auto-registration, realtime heartbeats, and live cluster integration
 - **Credit-Based Billing System**: Complete billing system with Midtrans payment gateway integration, unified transactions, and admin billing management
 - **Kubernetes Integration**: Full @kubernetes/client-node integration with pod lifecycle management
-- **Pod Management System**: Complete pod provisioning, monitoring, restart, and cleanup with service templates, real-time metrics integration, and worker node placement tracking
+- **Pod Management System**: Complete pod provisioning, monitoring, restart, stop, start, reset, and cleanup with service templates, real-time metrics integration, and worker node placement tracking
 - **Admin Pod Management System**: Complete admin dashboard backend with orphaned pod detection and cleanup functionality, comprehensive pod metrics with CPU/memory utilization, and worker node integration
 - **Service Templates**: Pre-configured templates for N8N, Ghost, and WordPress with dynamic configuration
 - **Background Job System**: Redis-based Bull queues with comprehensive job processing and retry logic
@@ -41,9 +47,10 @@ src/
 │   ├── worker.controller.js     # Worker node management with Kubernetes integration
 │   ├── billing.controller.js    # Billing operations (balance, top-up, invoices)
 │   ├── admin-billing.controller.js # Admin billing management handlers
-│   ├── subscription.controller.js # Subscription lifecycle management
+│   ├── subscription.controller.js # Subscription lifecycle management with pod reset/restart functionality
 │   ├── admin-subscription.controller.js # Admin subscription management handlers
-│   └── pod.controller.js        # Pod management with Kubernetes integration
+│   ├── upgrade.controller.js     # Subscription upgrade/downgrade functionality (planned)
+│   └── pod.controller.js        # Pod management with Kubernetes integration and admin reset functionality
 ├── middleware/
 │   ├── auth.middleware.js       # JWT authentication & authorization
 │   ├── error.middleware.js      # Global error handling
@@ -53,7 +60,8 @@ src/
 │   ├── auth.routes.js          # Authentication endpoints
 │   ├── services.routes.js      # Service catalog with validation
 │   ├── billing.routes.js       # Billing system endpoints
-│   ├── subscriptions.routes.js # Subscription management with credit-based flow
+│   ├── subscriptions.routes.js # Subscription management with credit-based flow and pod reset/restart endpoints
+│   ├── upgrade.routes.js       # Subscription upgrade/downgrade endpoints (planned)
 │   └── admin/                  # Admin-only endpoints with proper security boundaries
 │       ├── users.routes.js     # Admin user management with validation
 │       ├── workers.routes.js   # Admin worker node management with Kubernetes integration
@@ -69,6 +77,7 @@ src/
 │   ├── midtrans.service.js     # Midtrans payment gateway integration
 │   ├── subscription.service.js # Credit-based subscription lifecycle
 │   ├── pod.service.js          # Kubernetes pod lifecycle management
+│   ├── upgrade.service.js      # Subscription upgrade/downgrade functionality (planned)
 │   └── notification.service.js # Email notification system
 ├── validations/
 │   ├── auth.validation.js      # Authentication validation schemas
@@ -77,6 +86,7 @@ src/
 │   ├── worker.validation.js    # Worker node validation with flexible schemas
 │   ├── billing.validation.js   # Billing operations validation
 │   ├── subscription.validation.js # Subscription validation schemas
+│   ├── upgrade.validation.js     # Subscription upgrade/downgrade validation schemas
 │   └── admin-subscription.validation.js # Admin subscription validation schemas
 ├── jobs/
 │   ├── job-scheduler.js        # Enhanced job scheduler with queue integration
@@ -115,6 +125,7 @@ rest/
 ├── service.rest                # Service catalog API testing
 ├── billing.rest                # Billing system API testing
 ├── subscription.rest           # Subscription management API testing
+├── upgrade.rest                # Subscription upgrade/downgrade API testing
 ├── pod.rest                    # Admin pod management API testing
 ├── worker.rest                 # Admin worker node management API testing
 ├── admin-billing.rest          # Admin billing management API testing
@@ -138,7 +149,9 @@ monitoring/
 ├── MIDTRANS_QUICK_START.md         # 30-minute quick setup guide
 ├── MIDTRANS_TROUBLESHOOTING.md     # Troubleshooting guide with common issues
 ├── DOCKER_SETUP_GUIDE.md           # Docker containerization guide
-└── SERVICE_VARIANTS_DESIGN.md      # Service variants and plans design
+├── SERVICE_VARIANTS_DESIGN.md      # Service variants and plans design
+├── RESET_POD_FEATURE_DOCUMENTATION.md # Complete reset pod feature documentation
+└── UPGRADE_SUBSCRIPTION_FEATURE_PLAN.md # Subscription upgrade/downgrade implementation plan
 
 # Development Scripts
 ├── auto-heartbeat-k3d.js           # Continuous heartbeat script for k3d
@@ -166,7 +179,7 @@ monitoring/
 
 **Pod Management System:**
 
-- **Complete Pod Lifecycle**: Create, delete, restart, stop, start, monitor, and manage Kubernetes pods
+- **Complete Pod Lifecycle**: Create, delete, restart, stop, start, reset, monitor, and manage Kubernetes pods
 - **Service Templates Integration**: Automatic pod configuration using service templates (N8N, Ghost, WordPress)
 - **Namespace Management**: Customer isolation with dedicated namespaces
 - **Resource Management**: CPU, memory, and storage allocation with configurable limits
@@ -297,6 +310,67 @@ monitoring/
 - **Optimized Queries**: Single-query subscription details with all related data
 - **Data Migration**: Automated migration script to populate missing foreign key relationships
 - **Schema Cleanup**: Removed redundant SubscriptionTransaction model in favor of unified Transaction model
+
+#### Reset Pod Feature System ✅
+
+**Complete Reset Pod Implementation:**
+
+- **`resetPod()`**: **PRODUCTION READY** - Core reset functionality that completely destroys and recreates pods from scratch using original service templates
+- **`userResetPod()`**: **PRODUCTION READY** - User self-service reset with ownership verification and access control
+- **`adminResetPod()`**: **PRODUCTION READY** - Admin reset functionality with enhanced logging and cross-user access
+- **User Self-Service Endpoints**: Users can reset/restart their own subscription pods via `/api/v1/subscriptions/:id/reset-pod` and `/api/v1/subscriptions/:id/restart-pod`
+- **Admin Management Endpoints**: Admins can reset any pod via `/api/v1/admin/pods/:id/reset` or action-based endpoint with `"action": "reset"`
+- **Email Notifications**: Automated notifications sent to users when pods are reset with comprehensive reset information
+- **Database Schema Enhancements**: Added reset tracking fields (`resetCount`, `lastResetAt`, `resetBackup`) and `RESETTING` pod status
+- **Configuration Backup**: Automatic backup of pod configuration before reset for potential recovery
+- **Comprehensive Testing**: Complete REST API test scenarios for both user and admin reset functionality
+
+**Reset vs Restart Distinction:**
+
+- **Reset**: Complete pod destruction and recreation from service templates - **destroys all data and custom configuration**
+- **Restart**: Pod restart with current configuration preservation - **preserves all data and settings**
+- **Use Cases**: Reset for broken/corrupted pods, restart for normal maintenance and temporary issues
+- **Access Control**: Users can only reset their own pods, admins can reset any user's pod
+- **Audit Trail**: Complete logging and tracking of all reset operations with user/admin attribution
+
+**Technical Implementation:**
+
+- **Database Schema**: Added `resetCount`, `lastResetAt`, `resetBackup`, `customConfig`, `deploymentConfig`, `resourceLimits`, `lastError` fields to ServiceInstance model
+- **Pod Status**: Added `RESETTING` status to PodStatus enum for proper lifecycle tracking
+- **Email Integration**: Reset notification job processing with HTML email templates
+- **Error Handling**: Comprehensive error handling for various failure scenarios with proper user feedback
+- **Security**: Role-based access control with JWT authentication and ownership verification
+
+**Production Verification:**
+
+- **Complete Implementation**: All reset functionality implemented and tested
+- **User Experience**: Self-service reset capability with clear distinction from restart
+- **Admin Tools**: Comprehensive admin reset management with cross-user access
+- **Documentation**: Complete feature documentation with API specifications and testing scenarios
+- **Email Notifications**: Automated user notifications for all reset operations
+
+#### Upgrade Subscription Feature Planning 📋
+
+**Comprehensive Implementation Plan:**
+
+- **Business Requirements**: Detailed analysis of upgrade/downgrade functionality with prorated billing and seamless resource migration
+- **Technical Architecture**: Complete API endpoint design, database schema changes, and service layer enhancements
+- **Kubernetes Integration**: Resource migration strategy with rolling updates and validation
+- **Implementation Phases**: 6-week phased approach from core functionality to production optimization
+- **Prorated Billing Algorithm**: Detailed calculation logic for upgrade/downgrade pricing with examples
+- **Risk Assessment**: Comprehensive risk analysis with mitigation strategies
+- **Success Criteria**: Technical and business metrics for measuring implementation success
+
+**Planned Features:**
+
+- **Upgrade/Downgrade Endpoints**: `/api/v1/subscriptions/:id/upgrade`, `/api/v1/subscriptions/:id/downgrade`, `/api/v1/subscriptions/:id/change-plan`
+- **Prorated Billing**: Automatic calculation of upgrade costs and downgrade refunds based on remaining billing cycle
+- **Resource Migration**: Seamless pod resource updates without data loss or service interruption
+- **Plan Change History**: Complete tracking of all subscription plan changes with audit trail
+- **Admin Analytics**: Upgrade/downgrade patterns and business insights for administrators
+- **Zero Downtime**: Pod resource changes without service interruption using Kubernetes rolling updates
+
+**Current Status**: Planning phase complete, ready for implementation when prioritized
 
 #### Authentication System ✅
 
@@ -475,6 +549,13 @@ monitoring/
 53. **Service Management System Understanding**: **PRODUCTION VERIFIED** - Comprehensive understanding of service catalog architecture, variants, pricing, and API integration
 54. **Metrics-Server Production Integration**: **PRODUCTION VERIFIED** - Complete metrics-server setup and integration in k3d development environment with real data collection
 55. **Pod Lifecycle Metrics Integration**: **PRODUCTION VERIFIED** - Seamless integration of metrics data into existing pod management workflows and admin dashboards
+56. **Reset Pod Feature Implementation**: **PRODUCTION READY** - Complete pod reset functionality allowing both users and administrators to completely reset broken or corrupted pods with full data destruction and recreation from service templates
+57. **User Self-Service Pod Management**: **PRODUCTION READY** - Users can reset and restart their own subscription pods with proper ownership verification and access control
+58. **Admin Pod Reset Management**: **PRODUCTION READY** - Administrators can reset any user's pod with enhanced logging, cross-user access, and automated user notifications
+59. **Pod Reset Database Schema**: **PRODUCTION READY** - Enhanced ServiceInstance model with reset tracking fields, configuration backup, and RESETTING pod status
+60. **Reset vs Restart Architecture**: **PRODUCTION READY** - Clear distinction between reset (complete recreation) and restart (preserve data) with proper use case documentation
+61. **Reset Notification System**: **PRODUCTION READY** - Automated email notifications for all reset operations with HTML templates and queue-based delivery
+62. **Comprehensive Reset Testing**: **PRODUCTION READY** - Complete REST API test scenarios for both user and admin reset functionality with error handling validation
 
 ## Recent Updates (2025-07-24)
 
@@ -741,6 +822,77 @@ monitoring/
    - **Billing System**: Service pricing integration with billing and subscription systems
    - **Worker Management**: Service resource requirements and worker node allocation
    - **Admin Management**: Complete administrative control over service catalog
+
+## Recent Updates (2025-07-27) - Reset Pod Feature Implementation
+
+### Complete Reset Pod Feature System
+
+**Major Feature Addition**: Implemented comprehensive reset pod functionality allowing both users and administrators to completely reset broken or corrupted pods.
+
+**Changes Made**:
+
+1. **Core Reset Functionality**:
+
+   - **[`src/services/pod.service.js`](src/services/pod.service.js)**: Added comprehensive reset functions with production-ready implementation
+   - **`resetPod()`**: **PRODUCTION READY** - Core reset functionality that completely destroys and recreates pods from scratch using original service templates
+   - **`userResetPod()`**: **PRODUCTION READY** - User self-service reset with ownership verification and access control
+   - **`adminResetPod()`**: **PRODUCTION READY** - Admin reset functionality with enhanced logging and cross-user access
+
+2. **User Self-Service Implementation**:
+
+   - **[`src/controllers/subscription.controller.js`](src/controllers/subscription.controller.js)**: Added `resetSubscriptionPod()` and `restartSubscriptionPod()` controllers
+   - **[`src/routes/subscriptions.routes.js`](src/routes/subscriptions.routes.js)**: Added `POST /api/v1/subscriptions/:id/reset-pod` and `POST /api/v1/subscriptions/:id/restart-pod` endpoints
+   - **User Access Control**: Users can only reset their own subscription pods with proper ownership verification
+
+3. **Admin Management Implementation**:
+
+   - **[`src/controllers/pod.controller.js`](src/controllers/pod.controller.js)**: Added `adminResetPod()` controller for admin reset functionality
+   - **[`src/routes/admin/pods.routes.js`](src/routes/admin/pods.routes.js)**: Added `POST /api/v1/admin/pods/:id/reset` endpoint and updated action validation
+   - **Cross-User Access**: Admins can reset any user's pod with enhanced logging and automated user notifications
+
+4. **Database Schema Enhancements**:
+
+   - **[`prisma/schema.prisma`](prisma/schema.prisma)**: Added `RESETTING` status to PodStatus enum and reset tracking fields
+   - **Reset Tracking Fields**: Added `resetCount`, `lastResetAt`, `resetBackup`, `customConfig`, `deploymentConfig`, `resourceLimits`, `lastError` to ServiceInstance model
+   - **Configuration Backup**: Automatic backup of pod configuration before reset for potential recovery
+
+5. **Email Notification Integration**:
+
+   - **[`src/jobs/notification.jobs.js`](src/jobs/notification.jobs.js)**: Added `sendPodResetNotification()` job processor and `queuePodReset()` function
+   - **Automated Notifications**: Users receive email notifications when their pods are reset by themselves or administrators
+   - **HTML Templates**: Reset notification templates with comprehensive reset information
+
+6. **Comprehensive Testing**:
+
+   - **[`rest/subscription.rest`](rest/subscription.rest)**: Complete REST API test scenarios for user reset and restart functionality
+   - **[`rest/pod.rest`](rest/pod.rest)**: Admin reset functionality testing with error handling validation
+   - **Error Scenarios**: Comprehensive testing for various failure scenarios and access control validation
+
+**Technical Implementation Details**:
+
+- **Reset vs Restart Distinction**: Clear architectural distinction between reset (complete recreation) and restart (preserve data)
+- **Security Implementation**: Role-based access control with JWT authentication and ownership verification
+- **Error Handling**: Comprehensive error handling for various failure scenarios with proper user feedback
+- **Audit Trail**: Complete logging and tracking of all reset operations with user/admin attribution
+- **Production Readiness**: All functionality implemented, tested, and documented for production deployment
+
+**Documentation**:
+
+- **[`RESET_POD_FEATURE_DOCUMENTATION.md`](RESET_POD_FEATURE_DOCUMENTATION.md)**: Complete feature documentation with API specifications, testing scenarios, and implementation details
+
+### Upgrade Subscription Feature Planning
+
+**Comprehensive Planning Phase**: Detailed implementation plan for subscription upgrade/downgrade functionality.
+
+**Planning Deliverables**:
+
+- **[`UPGRADE_SUBSCRIPTION_FEATURE_PLAN.md`](UPGRADE_SUBSCRIPTION_FEATURE_PLAN.md)**: Complete 6-week implementation plan with technical architecture and business requirements
+- **[`src/routes/upgrade.routes.js`](src/routes/upgrade.routes.js)**: Route structure planning for upgrade endpoints
+- **[`rest/upgrade.rest`](rest/upgrade.rest)**: API testing scenarios for upgrade functionality
+- **Prorated Billing Algorithm**: Detailed calculation logic for upgrade/downgrade pricing
+- **Resource Migration Strategy**: Kubernetes integration plan for seamless pod resource updates
+
+**Current Status**: Planning phase complete, ready for implementation when prioritized
 
 ## Current Blockers
 
