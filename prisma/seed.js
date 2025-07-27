@@ -34,6 +34,12 @@ async function main() {
       features: ["Basic workflows", "5 active workflows", "Community support"],
       sortOrder: 1,
       isDefaultVariant: true,
+      // Volume configuration for N8N Basic
+      volumeSize: "250Mi",
+      volumeMountPath: "/home/node/.n8n",
+      volumeName: "n8n-data",
+      storageClass: "local-path",
+      accessMode: "ReadWriteOnce",
       environmentVars: {
         N8N_BASIC_AUTH_ACTIVE: "true",
         N8N_BASIC_AUTH_USER: "admin",
@@ -77,6 +83,12 @@ async function main() {
       ],
       sortOrder: 2,
       isDefaultVariant: false,
+      // Volume configuration for N8N Plus
+      volumeSize: "500Mi",
+      volumeMountPath: "/home/node/.n8n",
+      volumeName: "n8n-data",
+      storageClass: "local-path",
+      accessMode: "ReadWriteOnce",
       environmentVars: {
         N8N_BASIC_AUTH_ACTIVE: "true",
         N8N_BASIC_AUTH_USER: "admin",
@@ -121,6 +133,12 @@ async function main() {
       ],
       sortOrder: 3,
       isDefaultVariant: false,
+      // Volume configuration for N8N Pro
+      volumeSize: "1Gi",
+      volumeMountPath: "/home/node/.n8n",
+      volumeName: "n8n-data",
+      storageClass: "local-path",
+      accessMode: "ReadWriteOnce",
       environmentVars: {
         N8N_BASIC_AUTH_ACTIVE: "true",
         N8N_BASIC_AUTH_USER: "admin",
@@ -162,6 +180,12 @@ async function main() {
       features: ["Basic themes", "1 custom domain", "Email support"],
       sortOrder: 1,
       isDefaultVariant: true,
+      // Volume configuration for Ghost Basic
+      volumeSize: "500Mi",
+      volumeMountPath: "/var/lib/ghost/content",
+      volumeName: "ghost-data",
+      storageClass: "local-path",
+      accessMode: "ReadWriteOnce",
       environmentVars: {
         NODE_ENV: "production",
         url: "http://localhost:2368",
@@ -196,6 +220,12 @@ async function main() {
       features: ["Basic themes", "Community support", "5GB storage"],
       sortOrder: 1,
       isDefaultVariant: true,
+      // Volume configuration for WordPress Free
+      volumeSize: "250Mi",
+      volumeMountPath: "/var/www/html",
+      volumeName: "wordpress-data",
+      storageClass: "local-path",
+      accessMode: "ReadWriteOnce",
       environmentVars: {
         WORDPRESS_DB_HOST: "mysql:3306",
         WORDPRESS_DB_NAME: "wordpress",

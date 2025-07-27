@@ -1,0 +1,266 @@
+### Variables
+@baseUrl = http://localhost:3000/api/v1
+@contentType = application/json
+@adminToken = {{admin_login.response.body.data.tokens.accessToken}}
+@userToken = {{user_login.response.body.data.tokens.accessToken}}
+@subscriptionId = {{create_subscription.response.body.data.id}}
+
+### ========================================
+### PERSISTENT VOLUME LIFECYCLE TEST
+### Testing N8N Pod with SQLite Data Persistence
+### ========================================
+
+### Step 1: Admin Login (Get Admin Token)
+# @name admin_login
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
+}
+
+###
+
+### Step 2: User Login (Get User Token)
+# @name user_login
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "user@paas.com",
+  "password": "User123!@#"
+}
+
+###
+
+### Step 3: Check Available N8N Services
+GET {{baseUrl}}/services/n8n/variants
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 4: Check User Balance (Should have sufficient funds)
+GET {{baseUrl}}/billing/balance
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 5: Create N8N Basic Subscription (with Persistent Volume)
+# @name create_subscription
+POST {{baseUrl}}/subscriptions
+Content-Type: {{contentType}}
+Authorization: Bearer {{userToken}}
+
+{
+  "serviceId": "cm4gqhqhz0001uxqhqhqhqhqh"
+}
+
+###
+
+### Step 6: Monitor Pod Creation Status
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 7: Wait for Pod to be RUNNING (Check multiple times)
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 8: Get Pod Details (Admin View - Check PVC Creation)
+GET {{baseUrl}}/admin/pods
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Step 9: Check Kubernetes PVC Status (Admin Debug)
+GET {{baseUrl}}/admin/pods/debug
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Step 10: Test Pod Restart (Should Preserve Data)
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/restart-pod
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 11: Monitor Pod After Restart
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 12: Test Pod Reset (Should Delete and Recreate Volume)
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/reset-pod
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 13: Monitor Pod After Reset
+GET {{baseUrl}}/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 14: Admin Force Delete Pod (Should Delete PVC)
+POST {{baseUrl}}/admin/pods/{{subscriptionId}}/action
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "action": "delete"
+}
+
+###
+
+### Step 15: Verify Pod and PVC Deletion
+GET {{baseUrl}}/admin/pods/debug
+Authorization: Bearer {{adminToken}}
+
+###
+
+### ========================================
+### GRACE PERIOD TEST (60-Day Cleanup)
+### ========================================
+
+### Step 16: Create Another N8N Subscription for Grace Period Test
+# @name grace_subscription
+POST {{baseUrl}}/subscriptions
+Content-Type: {{contentType}}
+Authorization: Bearer {{userToken}}
+
+{
+  "serviceId": "cm4gqhqhz0001uxqhqhqhqhqh"
+}
+
+###
+
+### Step 17: Admin Cancel Subscription (Start Grace Period)
+PUT {{baseUrl}}/admin/subscriptions/{{grace_subscription.response.body.data.id}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "status": "CANCELLED"
+}
+
+###
+
+### Step 18: Verify Pod is Stopped but PVC Preserved
+GET {{baseUrl}}/admin/pods/debug
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Step 19: Simulate Grace Period Cleanup (Manual Trigger)
+POST {{baseUrl}}/admin/subscriptions/cleanup-expired
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Step 20: Verify Final Cleanup
+GET {{baseUrl}}/admin/pods/debug
+Authorization: Bearer {{adminToken}}
+
+###
+
+### ========================================
+### VOLUME CONFIGURATION VERIFICATION
+### ========================================
+
+### Step 21: Check N8N Basic Volume Configuration
+GET {{baseUrl}}/services/n8n
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 22: Check N8N Plus Volume Configuration
+GET {{baseUrl}}/services/n8n/variants
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 23: Admin View All Service Volume Configurations
+GET {{baseUrl}}/services/admin
+Authorization: Bearer {{adminToken}}
+
+###
+
+### ========================================
+### ERROR SCENARIOS
+### ========================================
+
+### Step 24: Test Pod Operations on Non-existent Subscription
+POST {{baseUrl}}/subscriptions/non-existent-id/restart-pod
+Authorization: Bearer {{userToken}}
+
+###
+
+### Step 25: Test User Access to Other User's Pod
+POST {{baseUrl}}/subscriptions/{{subscriptionId}}/reset-pod
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Step 26: Test Pod Operations on Expired Subscription
+# (This would require waiting for expiry or manually setting expiry date)
+
+###
+
+### ========================================
+### VOLUME SIZE VERIFICATION
+### ========================================
+
+### Step 27: Create N8N Plus Subscription (500Mi Volume)
+POST {{baseUrl}}/subscriptions
+Content-Type: {{contentType}}
+Authorization: Bearer {{userToken}}
+
+{
+  "serviceId": "cm4gqhqhz0002uxqhqhqhqhqh"
+}
+
+###
+
+### Step 28: Create N8N Pro Subscription (1Gi Volume)
+POST {{baseUrl}}/subscriptions
+Content-Type: {{contentType}}
+Authorization: Bearer {{userToken}}
+
+{
+  "serviceId": "cm4gqhqhz0003uxqhqhqhqhqh"
+}
+
+###
+
+### Step 29: Verify Different Volume Sizes in Kubernetes
+GET {{baseUrl}}/admin/pods/debug
+Authorization: Bearer {{adminToken}}
+
+###
+
+### ========================================
+### CLEANUP ALL TEST RESOURCES
+### ========================================
+
+### Step 30: Admin Delete All Test Subscriptions
+GET {{baseUrl}}/admin/subscriptions
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Step 31: Admin Cleanup Any Orphaned Pods
+POST {{baseUrl}}/admin/pods/cleanup-orphaned
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Step 32: Final Verification - No Test Resources Remaining
+GET {{baseUrl}}/admin/pods/debug
+Authorization: Bearer {{adminToken}}
+
+###

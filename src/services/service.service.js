@@ -230,50 +230,117 @@ const getServiceById = async (serviceId) => {
 };
 
 /**
- * Get service by name
+ * Get service by name and variant
  * @param {string} serviceName - Service name
+ * @param {string} variant - Service variant (optional, returns first found if not specified)
  * @returns {Promise<Object|null>} Service object or null
  */
-const getServiceByName = async (serviceName) => {
+const getServiceByName = async (serviceName, variant = null) => {
   try {
-    const service = await prisma.serviceCatalog.findUnique({
-      where: { name: serviceName },
-      select: {
-        id: true,
-        name: true,
-        displayName: true,
-        description: true,
-        version: true,
-        isActive: true,
-        cpuRequest: true,
-        cpuLimit: true,
-        memRequest: true,
-        memLimit: true,
-        monthlyPrice: true,
-        dockerImage: true,
-        containerPort: true,
-        environmentVars: true,
-        availableQuota: true,
-        variant: true,
-        variantDisplayName: true,
-        sortOrder: true,
-        isDefaultVariant: true,
-        category: true,
-        tags: true,
-        icon: true,
-        features: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            subscriptions: true,
+    let service;
+
+    if (variant) {
+      // Get specific variant
+      service = await prisma.serviceCatalog.findUnique({
+        where: {
+          name_variant: {
+            name: serviceName,
+            variant: variant,
           },
         },
-      },
-    });
+        select: {
+          id: true,
+          name: true,
+          variant: true,
+          variantDisplayName: true,
+          displayName: true,
+          description: true,
+          version: true,
+          isActive: true,
+          cpuRequest: true,
+          cpuLimit: true,
+          memRequest: true,
+          memLimit: true,
+          monthlyPrice: true,
+          dockerImage: true,
+          containerPort: true,
+          environmentVars: true,
+          availableQuota: true,
+          sortOrder: true,
+          isDefaultVariant: true,
+          category: true,
+          tags: true,
+          icon: true,
+          features: true,
+          volumeSize: true,
+          volumeMountPath: true,
+          volumeName: true,
+          storageClass: true,
+          accessMode: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              subscriptions: true,
+            },
+          },
+        },
+      });
+    } else {
+      // Get default variant or first available variant
+      service = await prisma.serviceCatalog.findFirst({
+        where: {
+          name: serviceName,
+          isActive: true,
+        },
+        orderBy: [
+          { isDefaultVariant: "desc" }, // Default variant first
+          { sortOrder: "asc" }, // Then by sort order
+        ],
+        select: {
+          id: true,
+          name: true,
+          variant: true,
+          variantDisplayName: true,
+          displayName: true,
+          description: true,
+          version: true,
+          isActive: true,
+          cpuRequest: true,
+          cpuLimit: true,
+          memRequest: true,
+          memLimit: true,
+          monthlyPrice: true,
+          dockerImage: true,
+          containerPort: true,
+          environmentVars: true,
+          availableQuota: true,
+          sortOrder: true,
+          isDefaultVariant: true,
+          category: true,
+          tags: true,
+          icon: true,
+          features: true,
+          volumeSize: true,
+          volumeMountPath: true,
+          volumeName: true,
+          storageClass: true,
+          accessMode: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              subscriptions: true,
+            },
+          },
+        },
+      });
+    }
 
     if (service) {
-      logger.info(`Retrieved service by name: ${service.name}`);
+      logger.info(
+        `Retrieved service by name: ${service.name}:${service.variant}`
+      );
     }
 
     return service;
@@ -292,6 +359,8 @@ const createService = async (serviceData) => {
   try {
     const {
       name,
+      variant,
+      variantDisplayName,
       displayName,
       description,
       version = "latest",
@@ -304,15 +373,34 @@ const createService = async (serviceData) => {
       dockerImage,
       containerPort = 80,
       environmentVars,
+      availableQuota = -1,
+      sortOrder = 1,
+      isDefaultVariant = false,
+      category,
+      tags,
+      icon,
+      features,
+      volumeSize,
+      volumeMountPath,
+      volumeName,
+      storageClass = "local-path",
+      accessMode = "ReadWriteOnce",
     } = serviceData;
 
-    // Check if service name already exists
+    // Check if service with this name and variant combination already exists
     const existingService = await prisma.serviceCatalog.findUnique({
-      where: { name },
+      where: {
+        name_variant: {
+          name,
+          variant,
+        },
+      },
     });
 
     if (existingService) {
-      const error = new Error("Service with this name already exists");
+      const error = new Error(
+        `Service variant '${name}:${variant}' already exists`
+      );
       error.code = "SERVICE_EXISTS";
       throw error;
     }
@@ -321,6 +409,8 @@ const createService = async (serviceData) => {
     const service = await prisma.serviceCatalog.create({
       data: {
         name,
+        variant,
+        variantDisplayName,
         displayName,
         description,
         version,
@@ -333,10 +423,24 @@ const createService = async (serviceData) => {
         dockerImage,
         containerPort,
         environmentVars,
+        availableQuota,
+        sortOrder,
+        isDefaultVariant,
+        category,
+        tags,
+        icon,
+        features,
+        volumeSize,
+        volumeMountPath,
+        volumeName,
+        storageClass,
+        accessMode,
       },
       select: {
         id: true,
         name: true,
+        variant: true,
+        variantDisplayName: true,
         displayName: true,
         description: true,
         version: true,
@@ -350,21 +454,24 @@ const createService = async (serviceData) => {
         containerPort: true,
         environmentVars: true,
         availableQuota: true,
-        variant: true,
-        variantDisplayName: true,
         sortOrder: true,
         isDefaultVariant: true,
         category: true,
         tags: true,
         icon: true,
         features: true,
+        volumeSize: true,
+        volumeMountPath: true,
+        volumeName: true,
+        storageClass: true,
+        accessMode: true,
         createdAt: true,
         updatedAt: true,
       },
     });
 
     logger.info(
-      `Created new service: ${service.name} (${service.displayName})`
+      `Created new service variant: ${service.name}:${service.variant} (${service.displayName})`
     );
 
     return service;

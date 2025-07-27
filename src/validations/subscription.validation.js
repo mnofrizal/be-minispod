@@ -143,10 +143,10 @@ export const cancelSubscriptionSchema = Joi.object({
 });
 
 /**
- * Validation middleware factory
+ * Standardized validation middleware factory
  */
 export const validateSubscription = (schema) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const { error, value } = schema.validate(req.body, {
       abortEarly: false,
       stripUnknown: true,
@@ -158,11 +158,8 @@ export const validateSubscription = (schema) => {
         message: detail.message,
       }));
 
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors,
-      });
+      const { validationError } = await import("../utils/response.util.js");
+      return res.status(400).json(validationError(errors));
     }
 
     req.body = value;
@@ -171,10 +168,10 @@ export const validateSubscription = (schema) => {
 };
 
 /**
- * Validation middleware for query parameters
+ * Standardized validation middleware for query parameters
  */
 export const validateSubscriptionQuery = (schema) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const { error, value } = schema.validate(req.query, {
       abortEarly: false,
       stripUnknown: true,
@@ -186,11 +183,8 @@ export const validateSubscriptionQuery = (schema) => {
         message: detail.message,
       }));
 
-      return res.status(400).json({
-        success: false,
-        message: "Query validation failed",
-        errors,
-      });
+      const { validationError } = await import("../utils/response.util.js");
+      return res.status(400).json(validationError(errors));
     }
 
     req.query = value;
@@ -199,10 +193,10 @@ export const validateSubscriptionQuery = (schema) => {
 };
 
 /**
- * Validation middleware for URL parameters
+ * Standardized validation middleware for URL parameters
  */
 export const validateSubscriptionParams = (schema) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const { error, value } = schema.validate(req.params, {
       abortEarly: false,
       stripUnknown: true,
@@ -214,11 +208,8 @@ export const validateSubscriptionParams = (schema) => {
         message: detail.message,
       }));
 
-      return res.status(400).json({
-        success: false,
-        message: "Parameter validation failed",
-        errors,
-      });
+      const { validationError } = await import("../utils/response.util.js");
+      return res.status(400).json(validationError(errors));
     }
 
     req.params = value;

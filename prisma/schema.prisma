@@ -73,6 +73,13 @@ model ServiceCatalog {
     icon     String? // Icon URL or identifier
     features String[] // ["1 vCPU", "1GB RAM", "Basic Support"]
 
+    // NEW: Volume configuration for the service variant
+    volumeSize      String? // e.g., "250Mi", "1Gi", "5Gi" - configurable per variant
+    volumeMountPath String? // e.g., "/home/node/.n8n", "/var/lib/ghost/content"
+    volumeName      String? // e.g., "n8n-data", "ghost-data", "wordpress-data"
+    storageClass    String? @default("local-path") // Kubernetes storage class
+    accessMode      String? @default("ReadWriteOnce") // Volume access mode
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
@@ -149,6 +156,12 @@ model ServiceInstance {
     deploymentConfig Json? // Deployment configuration
     resourceLimits   Json? // Resource limits configuration
     lastError        String? // Last error message
+
+    // NEW: Volume tracking for PersistentVolumeClaim
+    volumeClaimName String? // PVC name in Kubernetes (e.g., "n8n-data-customer-abc123")
+    volumeStatus    String? @default("Pending") // "Pending", "Bound", "Lost", "Available"
+    volumeSize      String? // Actual allocated volume size (copied from service catalog)
+    volumeMountPath String? // Mount path in container (copied from service catalog)
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

@@ -112,6 +112,11 @@ Authorization: Bearer {{adminToken}}
   "monthlyPrice": 45000,
   "dockerImage": "ghost:latest",
   "containerPort": 2368,
+  "volumeSize": "500Mi",
+  "volumeMountPath": "/var/lib/ghost/content",
+  "volumeName": "ghost-data",
+  "storageClass": "local-path",
+  "accessMode": "ReadWriteOnce",
   "environmentVars": {
     "NODE_ENV": "production",
     "url": "http://localhost:2368"
@@ -127,8 +132,8 @@ Authorization: Bearer {{adminToken}}
 
 {
   "name": "n8n",
-  "variant": "basic",
-  "variantDisplayName": "Basic",
+  "variant": "basicnew",
+  "variantDisplayName": "Basic New",
   "displayName": "N8N Workflow Automation - Basic",
   "description": "Workflow automation tool for connecting apps and services - Basic plan with essential features.",
   "version": "latest",
@@ -137,7 +142,7 @@ Authorization: Bearer {{adminToken}}
   "cpuLimit": "1",
   "memRequest": "512Mi",
   "memLimit": "1Gi",
-  "monthlyPrice": 25000,
+  "monthlyPrice": 0,
   "dockerImage": "n8nio/n8n:latest",
   "containerPort": 5678,
   "category": "automation",
@@ -146,6 +151,11 @@ Authorization: Bearer {{adminToken}}
   "features": ["Basic workflows", "5 active workflows", "Community support"],
   "sortOrder": 1,
   "isDefaultVariant": true,
+  "volumeSize": "250Mi",
+  "volumeMountPath": "/home/node/.n8n",
+  "volumeName": "n8n-data",
+  "storageClass": "local-path",
+  "accessMode": "ReadWriteOnce",
   "environmentVars": {
     "N8N_BASIC_AUTH_ACTIVE": "true",
     "N8N_BASIC_AUTH_USER": "admin",
@@ -181,6 +191,11 @@ Authorization: Bearer {{adminToken}}
   "features": ["Advanced workflows", "25 active workflows", "Email support", "Custom nodes"],
   "sortOrder": 2,
   "isDefaultVariant": false,
+  "volumeSize": "500Mi",
+  "volumeMountPath": "/home/node/.n8n",
+  "volumeName": "n8n-data",
+  "storageClass": "local-path",
+  "accessMode": "ReadWriteOnce",
   "environmentVars": {
     "N8N_BASIC_AUTH_ACTIVE": "true",
     "N8N_BASIC_AUTH_USER": "admin",
@@ -217,6 +232,11 @@ Authorization: Bearer {{adminToken}}
   "features": ["Unlimited workflows", "Priority support", "Custom integrations", "Advanced security"],
   "sortOrder": 3,
   "isDefaultVariant": false,
+  "volumeSize": "1Gi",
+  "volumeMountPath": "/home/node/.n8n",
+  "volumeName": "n8n-data",
+  "storageClass": "local-path",
+  "accessMode": "ReadWriteOnce",
   "environmentVars": {
     "N8N_BASIC_AUTH_ACTIVE": "true",
     "N8N_BASIC_AUTH_USER": "admin",
@@ -254,6 +274,11 @@ Authorization: Bearer {{adminToken}}
   "features": ["Basic themes", "1 custom domain", "Email support"],
   "sortOrder": 1,
   "isDefaultVariant": true,
+  "volumeSize": "500Mi",
+  "volumeMountPath": "/var/lib/ghost/content",
+  "volumeName": "ghost-data",
+  "storageClass": "local-path",
+  "accessMode": "ReadWriteOnce",
   "environmentVars": {
     "NODE_ENV": "production",
     "url": "http://localhost:2368"
@@ -288,6 +313,11 @@ Authorization: Bearer {{adminToken}}
   "features": ["Basic themes", "Community support", "5GB storage"],
   "sortOrder": 1,
   "isDefaultVariant": true,
+  "volumeSize": "250Mi",
+  "volumeMountPath": "/var/www/html",
+  "volumeName": "wordpress-data",
+  "storageClass": "local-path",
+  "accessMode": "ReadWriteOnce",
   "environmentVars": {
     "WORDPRESS_DB_HOST": "mysql:3306",
     "WORDPRESS_DB_NAME": "wordpress"

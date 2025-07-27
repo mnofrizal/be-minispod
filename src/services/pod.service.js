@@ -97,23 +97,34 @@ export const createPod = async (subscriptionId, serviceConfig) => {
       // Continue without ingress - service will still be accessible internally
     }
 
-    // 5. Create service instance record
-    const serviceInstance = await prisma.serviceInstance.create({
-      data: {
-        subscriptionId,
-        status: "PENDING",
-        podName,
-        namespace: namespaceName,
-        internalUrl,
-        externalUrl: externalUrl,
-        cpuAllocated: resourceLimits.cpu,
-        memAllocated: resourceLimits.memory,
-        credentials: {
-          deployment: deployment.metadata.name,
-          service: k8sService.metadata.name,
-          ingress: ingress?.metadata.name,
-        },
+    // 5. Create service instance record with volume information
+    const serviceInstanceData = {
+      subscriptionId,
+      status: "PENDING",
+      podName,
+      namespace: namespaceName,
+      internalUrl,
+      externalUrl: externalUrl,
+      cpuAllocated: resourceLimits.cpu,
+      memAllocated: resourceLimits.memory,
+      credentials: {
+        deployment: deployment.metadata.name,
+        service: k8sService.metadata.name,
+        ingress: ingress?.metadata.name,
       },
+    };
+
+    // Add volume information if service has volume configuration
+    if (service.volumeSize && service.volumeMountPath) {
+      const volumeClaimName = `${podName}-pvc`;
+      serviceInstanceData.volumeClaimName = volumeClaimName;
+      serviceInstanceData.volumeSize = service.volumeSize;
+      serviceInstanceData.volumeMountPath = service.volumeMountPath;
+      serviceInstanceData.volumeStatus = "Pending"; // Will be updated by monitoring
+    }
+
+    const serviceInstance = await prisma.serviceInstance.create({
+      data: serviceInstanceData,
     });
 
     logger.info(`Created pod ${podName} for subscription ${subscriptionId}`);
@@ -134,14 +145,18 @@ export const createPod = async (subscriptionId, serviceConfig) => {
 /**
  * Delete pod and cleanup resources
  */
-export const deletePod = async (serviceInstanceId) => {
+export const deletePod = async (
+  serviceInstanceId,
+  reason = "manual-deletion",
+  deletePVC = true
+) => {
   try {
     const k8sConfig = getKubernetesConfig();
     if (!k8sConfig.isReady()) {
       throw new Error("Kubernetes client not ready");
     }
 
-    // Get service instance
+    // Get service instance with volume information
     const serviceInstance = await prisma.serviceInstance.findUnique({
       where: { id: serviceInstanceId },
     });
@@ -154,8 +169,14 @@ export const deletePod = async (serviceInstanceId) => {
     const appsV1Api = k8sConfig.getAppsV1Api();
     const networkingV1Api = k8sConfig.getNetworkingV1Api();
 
-    const { namespace, podName } = serviceInstance;
+    const { namespace, podName, volumeClaimName } = serviceInstance;
     const deploymentConfig = serviceInstance.credentials || {};
+
+    logger.info(
+      `Starting deletion of pod ${serviceInstanceId} with resources: deployment, service, ingress${
+        volumeClaimName ? `, PVC (${volumeClaimName})` : ""
+      }`
+    );
 
     // Delete resources in reverse order
     try {
@@ -197,14 +218,48 @@ export const deletePod = async (serviceInstanceId) => {
       logger.warn(`Failed to delete deployment: ${error.message}`);
     }
 
-    // Update service instance status
+    // Delete PersistentVolumeClaim if it exists and deletePVC is true
+    if (volumeClaimName && deletePVC) {
+      try {
+        await coreV1Api.deleteNamespacedPersistentVolumeClaim(
+          volumeClaimName,
+          namespace
+        );
+        logger.info(
+          `Deleted PersistentVolumeClaim ${volumeClaimName} for pod ${serviceInstanceId} (reason: ${reason})`
+        );
+      } catch (pvcError) {
+        if (pvcError.response?.statusCode === 404) {
+          logger.warn(
+            `PVC ${volumeClaimName} not found, may have been already deleted`
+          );
+        } else {
+          logger.error(
+            `Failed to delete PVC ${volumeClaimName}: ${pvcError.message}`
+          );
+          // Don't fail the entire deletion if PVC deletion fails
+          // The PVC will be cleaned up by background jobs or manual intervention
+        }
+      }
+    } else if (volumeClaimName && !deletePVC) {
+      logger.info(
+        `Preserving PersistentVolumeClaim ${volumeClaimName} for pod ${serviceInstanceId} (reason: ${reason})`
+      );
+    }
+
+    // Update service instance status and clear volume information
     await prisma.serviceInstance.update({
       where: { id: serviceInstanceId },
-      data: { status: "DELETED" },
+      data: {
+        status: "DELETED",
+        volumeStatus: volumeClaimName ? "DELETED" : null,
+      },
     });
 
     logger.info(
-      `Deleted pod resources for service instance ${serviceInstanceId}`
+      `Successfully deleted pod resources for service instance ${serviceInstanceId}${
+        volumeClaimName ? " including PVC" : ""
+      }`
     );
     return true;
   } catch (error) {
@@ -776,6 +831,7 @@ export const createDeployment = async ({
   try {
     const k8sConfig = getKubernetesConfig();
     const appsV1Api = k8sConfig.getAppsV1Api();
+    const coreV1Api = k8sConfig.getCoreV1Api();
 
     // Check if deployment already exists
     try {
@@ -798,6 +854,154 @@ export const createDeployment = async ({
       // Deployment doesn't exist, continue with creation
     }
 
+    // Get service catalog configuration for volume settings
+    const subscription = await prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: {
+        service: {
+          select: {
+            id: true,
+            name: true,
+            volumeSize: true,
+            volumeMountPath: true,
+            volumeName: true,
+            storageClass: true,
+            accessMode: true,
+          },
+        },
+      },
+    });
+
+    if (!subscription) {
+      throw new Error(`Subscription ${subscriptionId} not found`);
+    }
+
+    const serviceVolumeConfig = subscription.service;
+    let volumeClaimName = null;
+    let volumeStatus = null;
+
+    // Create PersistentVolumeClaim if volume configuration exists
+    if (serviceVolumeConfig.volumeSize && serviceVolumeConfig.volumeMountPath) {
+      volumeClaimName = `${deploymentName}-pvc`;
+
+      logger.info(
+        `Creating PersistentVolumeClaim ${volumeClaimName} for deployment ${deploymentName}`
+      );
+
+      try {
+        // Check if PVC already exists
+        try {
+          const existingPVC =
+            await coreV1Api.readNamespacedPersistentVolumeClaim(
+              volumeClaimName,
+              namespaceName
+            );
+          logger.info(
+            `PVC ${volumeClaimName} already exists, using existing PVC`
+          );
+          volumeStatus = existingPVC.body.status?.phase || "Unknown";
+        } catch (pvcError) {
+          if (pvcError.response?.statusCode !== 404) {
+            logger.error(
+              `Error checking existing PVC ${volumeClaimName}:`,
+              pvcError
+            );
+            throw pvcError;
+          }
+
+          // PVC doesn't exist, create it
+          const pvcSpec = {
+            metadata: {
+              name: volumeClaimName,
+              namespace: namespaceName,
+              labels: {
+                app: deploymentName,
+                service: serviceName,
+                "paas.customer": userId,
+                "paas.subscription": subscriptionId,
+                "paas.volume": "true",
+              },
+            },
+            spec: {
+              accessModes: [serviceVolumeConfig.accessMode || "ReadWriteOnce"],
+              storageClassName:
+                serviceVolumeConfig.storageClass || "local-path",
+              resources: {
+                requests: {
+                  storage: serviceVolumeConfig.volumeSize,
+                },
+              },
+            },
+          };
+
+          const pvcResult =
+            await coreV1Api.createNamespacedPersistentVolumeClaim(
+              namespaceName,
+              pvcSpec
+            );
+
+          volumeStatus = pvcResult.body.status?.phase || "Pending";
+          logger.info(
+            `Created PVC ${volumeClaimName} with size ${serviceVolumeConfig.volumeSize} in namespace ${namespaceName}`
+          );
+        }
+      } catch (pvcCreationError) {
+        logger.error(
+          `Error creating PVC ${volumeClaimName}:`,
+          pvcCreationError
+        );
+        // Continue with deployment creation even if PVC fails
+        // The pod will be in Pending state until PVC is resolved
+        volumeStatus = "Failed";
+      }
+    }
+
+    // Prepare container spec with volume mounts if needed
+    const containerSpec = {
+      name: serviceName,
+      image: dockerImage,
+      ports: [
+        {
+          containerPort: containerPort,
+        },
+      ],
+      resources: serviceConfig.resources || {
+        limits: resourceLimits,
+        requests: {
+          cpu: "0.25",
+          memory: "512Mi",
+        },
+      },
+      env: serviceConfig.env || generateEnvironmentVariables(serviceConfig),
+    };
+
+    // Add volume mount if PVC was created
+    if (volumeClaimName && serviceVolumeConfig.volumeMountPath) {
+      containerSpec.volumeMounts = [
+        {
+          name: serviceVolumeConfig.volumeName || "data-volume",
+          mountPath: serviceVolumeConfig.volumeMountPath,
+        },
+      ];
+    }
+
+    // Prepare pod template spec with volumes if needed
+    const podTemplateSpec = {
+      containers: [containerSpec],
+    };
+
+    // Add volume if PVC was created
+    if (volumeClaimName) {
+      podTemplateSpec.volumes = [
+        {
+          name: serviceVolumeConfig.volumeName || "data-volume",
+          persistentVolumeClaim: {
+            claimName: volumeClaimName,
+          },
+        },
+      ];
+    }
+
     const deployment = {
       metadata: {
         name: deploymentName,
@@ -807,6 +1011,7 @@ export const createDeployment = async ({
           service: serviceName,
           "paas.customer": userId,
           "paas.subscription": subscriptionId,
+          ...(volumeClaimName && { "paas.volume": "true" }),
         },
       },
       spec: {
@@ -824,29 +1029,7 @@ export const createDeployment = async ({
               "paas.customer": userId,
             },
           },
-          spec: {
-            containers: [
-              {
-                name: serviceName,
-                image: dockerImage,
-                ports: [
-                  {
-                    containerPort: containerPort,
-                  },
-                ],
-                resources: serviceConfig.resources || {
-                  limits: resourceLimits,
-                  requests: {
-                    cpu: "0.25",
-                    memory: "512Mi",
-                  },
-                },
-                env:
-                  serviceConfig.env ||
-                  generateEnvironmentVariables(serviceConfig),
-              },
-            ],
-          },
+          spec: podTemplateSpec,
         },
       },
     };
@@ -855,9 +1038,41 @@ export const createDeployment = async ({
       namespaceName,
       deployment
     );
+
+    // Update ServiceInstance with volume information if PVC was created
+    if (volumeClaimName) {
+      try {
+        await prisma.serviceInstance.updateMany({
+          where: {
+            subscriptionId: subscriptionId,
+            podName: deploymentName,
+          },
+          data: {
+            volumeClaimName: volumeClaimName,
+            volumeStatus: volumeStatus,
+            volumeSize: serviceVolumeConfig.volumeSize,
+            volumeMountPath: serviceVolumeConfig.volumeMountPath,
+          },
+        });
+
+        logger.info(
+          `Updated ServiceInstance with volume info: PVC=${volumeClaimName}, Status=${volumeStatus}`
+        );
+      } catch (updateError) {
+        logger.error(
+          `Failed to update ServiceInstance with volume info:`,
+          updateError
+        );
+        // Don't fail deployment creation if database update fails
+      }
+    }
+
     logger.info(
-      `Created deployment ${deploymentName} in namespace ${namespaceName}`
+      `Created deployment ${deploymentName} in namespace ${namespaceName}${
+        volumeClaimName ? ` with PVC ${volumeClaimName}` : ""
+      }`
     );
+
     return result.body;
   } catch (error) {
     logger.error(`Error creating deployment ${deploymentName}:`, error);
@@ -1595,8 +1810,8 @@ export const adminDeletePod = async (serviceInstanceId) => {
       throw new Error("Pod not found");
     }
 
-    // Delete the pod using existing method
-    await deletePod(serviceInstanceId);
+    // Delete the pod using existing method (preserve PVC for restart)
+    await deletePod(serviceInstanceId, "restart-operation", false);
 
     logger.info(
       `Admin successfully deleted pod ${serviceInstanceId} for user ${serviceInstance.subscription.user.email}`
@@ -1897,7 +2112,7 @@ export const adminPodAction = async (serviceInstanceId, action) => {
         break;
 
       case "delete":
-        await deletePod(serviceInstanceId);
+        await deletePod(serviceInstanceId, "admin-delete-action", true);
         result = {
           action: "delete",
           message: "Pod deletion initiated",
@@ -2831,6 +3046,32 @@ export const resetPod = async (serviceInstanceId) => {
         );
       }
 
+      // Delete PersistentVolumeClaim if it exists (pod reset = harus dihapus)
+      const { volumeClaimName } = serviceInstance;
+      if (volumeClaimName) {
+        try {
+          await coreV1Api.deleteNamespacedPersistentVolumeClaim(
+            volumeClaimName,
+            namespace
+          );
+          logger.info(
+            `Deleted PersistentVolumeClaim ${volumeClaimName} for pod reset`
+          );
+        } catch (pvcError) {
+          if (pvcError.response?.statusCode === 404) {
+            logger.warn(
+              `PVC ${volumeClaimName} not found during reset, may have been already deleted`
+            );
+          } else {
+            logger.error(
+              `Failed to delete PVC ${volumeClaimName} during reset: ${pvcError.message}`
+            );
+            // Continue with reset even if PVC deletion fails
+            // The new PVC will have a different name anyway
+          }
+        }
+      }
+
       // Wait for resources to be fully cleaned up
       logger.info(`Waiting for resource cleanup to complete...`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -2912,6 +3153,7 @@ export const resetPod = async (serviceInstanceId) => {
       }
 
       // Step 4: Update service instance with fresh configuration
+      // Clear volume information - new PVC will be created by createDeployment
       const updatedServiceInstance = await prisma.serviceInstance.update({
         where: { id: serviceInstanceId },
         data: {
@@ -2931,6 +3173,11 @@ export const resetPod = async (serviceInstanceId) => {
           resetCount: (serviceInstance.resetCount || 0) + 1,
           lastResetAt: new Date(),
           resetBackup: JSON.stringify(backupConfig),
+          // Clear volume information - fresh PVC will be created
+          volumeClaimName: null,
+          volumeStatus: null,
+          volumeSize: null,
+          volumeMountPath: null,
         },
       });
 

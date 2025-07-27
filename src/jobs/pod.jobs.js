@@ -236,18 +236,22 @@ export const podJobs = {
    */
   async deletePod(job) {
     try {
-      const { serviceInstanceId, reason = "manual" } = job.data;
+      const {
+        serviceInstanceId,
+        reason = "manual",
+        deletePVC = true,
+      } = job.data;
 
       logger.info(
-        `Deleting pod for service instance ${serviceInstanceId}, reason: ${reason}`
+        `Deleting pod for service instance ${serviceInstanceId}, reason: ${reason}, deletePVC: ${deletePVC}`
       );
 
-      await deletePod(serviceInstanceId);
+      await deletePod(serviceInstanceId, reason, deletePVC);
 
       logger.info(
         `Successfully deleted pod for service instance ${serviceInstanceId}`
       );
-      return { success: true, serviceInstanceId, reason };
+      return { success: true, serviceInstanceId, reason, deletePVC };
     } catch (error) {
       logger.error(
         `Error deleting pod for service instance ${job.data.serviceInstanceId}:`,
@@ -445,7 +449,7 @@ export const podJobs = {
               instance.subscription.status
             )
           ) {
-            await deletePod(instance.id);
+            await deletePod(instance.id, "failed-pod-cleanup", true);
             cleanedCount++;
           } else {
             // Try to restart if subscription is still active
@@ -497,17 +501,21 @@ export const podJobs = {
   /**
    * Queue pod deletion
    */
-  async queuePodDeletion(serviceInstanceId, reason = "manual") {
+  async queuePodDeletion(
+    serviceInstanceId,
+    reason = "manual",
+    deletePVC = true
+  ) {
     try {
       await queueManager.addJob(
         "pod-jobs",
         "delete-pod",
-        { serviceInstanceId, reason },
+        { serviceInstanceId, reason, deletePVC },
         { priority: 7 }
       );
 
       logger.info(
-        `Queued pod deletion for ${serviceInstanceId}, reason: ${reason}`
+        `Queued pod deletion for ${serviceInstanceId}, reason: ${reason}, deletePVC: ${deletePVC}`
       );
     } catch (error) {
       logger.error(

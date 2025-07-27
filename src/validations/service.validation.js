@@ -1,5 +1,4 @@
 import Joi from "joi";
-import * as validationUtil from "../utils/validation.util.js";
 
 /**
  * Service catalog validation schemas
@@ -7,7 +6,7 @@ import * as validationUtil from "../utils/validation.util.js";
 
 // Validation middleware function
 const validate = (schema, source = "body") => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const data =
       source === "params"
         ? req.params
@@ -15,14 +14,19 @@ const validate = (schema, source = "body") => {
         ? req.query
         : req.body;
 
-    const { error, value } = schema.validate(data);
+    const { error, value } = schema.validate(data, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
     if (error) {
-      return res.status(400).json({
-        success: false,
-        message: validationUtil.formatValidationError(error),
-        code: "VALIDATION_ERROR",
-        statusCode: 400,
-      });
+      const errors = error.details.map((detail) => ({
+        field: detail.path.join("."),
+        message: detail.message,
+      }));
+
+      const { validationError } = await import("../utils/response.util.js");
+      return res.status(400).json(validationError(errors));
     }
 
     // Replace the original data with validated data

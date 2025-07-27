@@ -183,21 +183,23 @@ export const subscriptionJobs = {
   },
 
   /**
-   * Cleanup expired subscriptions
+   * Cleanup expired subscriptions with 60-day grace period for PVCs
    */
   async cleanupExpiredSubscriptions(job) {
     try {
-      logger.info("Starting expired subscription cleanup");
+      logger.info(
+        "Starting expired subscription cleanup with 60-day grace period"
+      );
 
-      // Find subscriptions expired for more than 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Find subscriptions expired for more than 60 days (grace period)
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
       const expiredSubscriptions = await prisma.subscription.findMany({
         where: {
           status: "EXPIRED",
           expiresAt: {
-            lt: thirtyDaysAgo,
+            lt: sixtyDaysAgo,
           },
         },
         include: {
@@ -210,16 +212,25 @@ export const subscriptionJobs = {
 
       for (const subscription of expiredSubscriptions) {
         try {
-          // Delete associated pod if exists
+          // Delete associated pod and PVC if exists
           if (subscription.serviceInstance) {
             await queueManager.addJob(
               "pod-jobs",
               "delete-pod",
               {
                 serviceInstanceId: subscription.serviceInstance.id,
-                reason: "subscription-expired-cleanup",
+                reason: "subscription-expired-cleanup-60days",
+                deletePVC: true, // Ensure PVC is deleted after grace period
               },
               { priority: 3 }
+            );
+
+            logger.info(
+              `Scheduled pod and PVC deletion for expired subscription ${subscription.id} ` +
+                `(expired ${Math.floor(
+                  (new Date() - new Date(subscription.expiresAt)) /
+                    (1000 * 60 * 60 * 24)
+                )} days ago)`
             );
           }
 
@@ -254,7 +265,7 @@ export const subscriptionJobs = {
       }
 
       logger.info(
-        `Expired subscription cleanup completed: ${cleanedCount} subscriptions`
+        `Expired subscription cleanup completed: ${cleanedCount} subscriptions cleaned after 60-day grace period`
       );
       return { cleanedCount, totalExpired: expiredSubscriptions.length };
     } catch (error) {

@@ -8,8 +8,8 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "customer@test.com",
-  "password": "Customer123!@#"
+  "email": "admin@paas.com",
+  "password": "Admin123!@#"
 }
 ### Create Subscription
 POST {{baseUrl}}/subscriptions
@@ -146,14 +146,14 @@ Content-Type: application/json
 ### Reset Subscription Pod (User)
 # Completely destroys and recreates the pod with fresh configuration
 # Use when the pod is broken and needs a clean start
-POST {{baseUrl}}/subscriptions/cmdjsj8e600039z1s9bhdzz01/reset-pod
+POST {{baseUrl}}/subscriptions/cmdlh6vz30005p1mo4rwz1gbz/reset-pod
 Authorization: {{authToken}}
 Content-Type: application/json
 
 ### Restart Subscription Pod (User)
 # Restarts the pod with current configuration
 # Use for normal restart needs
-POST {{baseUrl}}/subscriptions/cmdjsj8e600039z1s9bhdzz01/restart-pod
+POST {{baseUrl}}/subscriptions/cmdlh6vz30005p1mo4rwz1gbz/restart-pod
 Authorization: {{authToken}}
 Content-Type: application/json
 
