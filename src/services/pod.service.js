@@ -1,6 +1,7 @@
 import { getKubernetesConfig, kubernetesUtils } from "../config/kubernetes.js";
 import { prisma } from "../config/database.js";
 import { notificationJobs } from "../jobs/notification.jobs.js";
+import { templateUtils } from "../utils/template.util.js";
 import logger from "../utils/logger.util.js";
 
 /**
@@ -3118,7 +3119,13 @@ export const resetPod = async (serviceInstanceId) => {
         dockerImage: service.dockerImage,
         containerPort: service.containerPort || 80,
         resourceLimits,
-        serviceConfig: {}, // Fresh config - no custom user config to avoid issues
+        serviceConfig: templateUtils.generateServiceConfig(service, {
+          adminEmail: user.email,
+          adminPassword: templateUtils.generateRandomPassword(),
+          webhookUrl: `https://${subscription.subdomain}.${service.name}.${
+            process.env.K8S_CLUSTER_DOMAIN || "localhost"
+          }`,
+        }),
         userId: user.id,
         subscriptionId: subscription.id,
       });

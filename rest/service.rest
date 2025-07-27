@@ -328,7 +328,7 @@ Authorization: Bearer {{adminToken}}
 
 ### Update Service (Admin)
 # Replace SERVICE_ID with actual service ID
-PUT {{baseUrl}}/services/SERVICE_ID
+PUT {{baseUrl}}/services/cmdlv08h80000265iw2ayqagg
 Content-Type: {{contentType}}
 Authorization: Bearer {{adminToken}}
 
@@ -344,7 +344,7 @@ Authorization: Bearer {{adminToken}}
 
 ### Toggle Service Status (Admin)
 # Replace SERVICE_ID with actual service ID
-PATCH {{baseUrl}}/services/SERVICE_ID/toggle-status
+PATCH {{baseUrl}}/services/cmdlv08h80000265iw2ayqagg/toggle-status
 Authorization: Bearer {{adminToken}}
 
 ###

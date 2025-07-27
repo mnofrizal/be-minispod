@@ -1,0 +1,243 @@
+### Quota Management Testing - Admin Subscription Status Changes
+### Test the bidirectional quota management system
+
+@baseUrl = http://localhost:3000/api/v1
+@adminToken = your-admin-jwt-token-here
+@subscriptionId = your-subscription-id-here
+
+### 1. Get initial service quota (check before testing)
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+### 2. Get subscription details (check current status)
+GET {{baseUrl}}/admin/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{adminToken}}
+
+### ========================================
+### SCENARIO 1: ACTIVE → CANCELLED → ACTIVE
+### ========================================
+
+### 3. Cancel active subscription (should increment quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "CANCELLED"
+}
+
+### Expected: 
+### - Subscription status: CANCELLED
+### - Service quota: +1 (incremented)
+### - Pod: Stopped
+### - Log: "Admin {id} cancelled subscription {id}, restored quota for service {name}"
+
+### 4. Check quota after cancellation
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+### 5. Reactivate cancelled subscription (should decrement quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Expected:
+### - Subscription status: ACTIVE
+### - Service quota: -1 (decremented back to original)
+### - Pod: Restarted
+### - Log: "Admin {id} reactivated subscription {id}, reduced quota for service {name}"
+
+### 6. Check quota after reactivation
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+### ========================================
+### SCENARIO 2: ACTIVE → SUSPENDED → ACTIVE
+### ========================================
+
+### 7. Suspend active subscription (should increment quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "SUSPENDED"
+}
+
+### Expected:
+### - Subscription status: SUSPENDED
+### - Service quota: +1 (incremented)
+### - Pod: Stopped
+### - Log: "Admin {id} suspended subscription {id}, restored quota for service {name}"
+
+### 8. Check quota after suspension
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+### 9. Reactivate suspended subscription (should decrement quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Expected:
+### - Subscription status: ACTIVE
+### - Service quota: -1 (decremented back to original)
+### - Pod: Restarted
+### - Log: "Admin {id} reactivated suspended subscription {id}, reduced quota for service {name}"
+
+### 10. Check quota after reactivation from suspension
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+### ========================================
+### SCENARIO 3: ACTIVE → EXPIRED → ACTIVE
+### ========================================
+
+### 11. Expire active subscription (should increment quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "EXPIRED"
+}
+
+### Expected:
+### - Subscription status: EXPIRED
+### - Service quota: +1 (incremented)
+### - Pod: Stopped
+### - Log: "Admin {id} expired subscription {id}, restored quota for service {name}"
+
+### 12. Check quota after expiration
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+### 13. Reactivate expired subscription (should decrement quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Expected:
+### - Subscription status: ACTIVE
+### - Service quota: -1 (decremented back to original)
+### - Pod: Restarted
+### - Log: "Admin {id} reactivated expired subscription {id}, reduced quota for service {name}"
+
+### 14. Check final quota (should be same as initial)
+GET {{baseUrl}}/services
+Authorization: Bearer {{adminToken}}
+
+### ========================================
+### SCENARIO 4: ERROR HANDLING - Quota Exhaustion
+### ========================================
+
+### 15. First, cancel subscription to free up quota
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "CANCELLED"
+}
+
+### 16. Manually set service quota to 0 (simulate quota exhaustion)
+### Note: This requires direct database access or admin service management endpoint
+### UPDATE service_catalog SET available_quota = 0 WHERE id = 'service-id';
+
+### 17. Try to reactivate when quota is exhausted (should fail)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Expected:
+### - HTTP 400 Bad Request
+### - Error: "Cannot reactivate subscription: Service quota exhausted for {service name}"
+### - Subscription status: Remains CANCELLED
+### - Service quota: Unchanged (still 0)
+
+### ========================================
+### SCENARIO 5: No-op Status Changes (should not affect quota)
+### ========================================
+
+### 18. Change ACTIVE to ACTIVE (no-op, should not affect quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+### Expected:
+### - Subscription status: ACTIVE (unchanged)
+### - Service quota: Unchanged
+### - No quota-related logs
+
+### 19. Change CANCELLED to CANCELLED (no-op, should not affect quota)
+PUT {{baseUrl}}/admin/subscriptions/{{subscriptionId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "CANCELLED"
+}
+
+### Expected:
+### - Subscription status: CANCELLED (unchanged)
+### - Service quota: Unchanged
+### - No quota-related logs
+
+### ========================================
+### SCENARIO 6: Services with Unlimited Quota
+### ========================================
+
+### 20. Test with service that has availableQuota = null (unlimited)
+### Use a subscription for a service with unlimited quota
+### All status changes should work but not affect quota
+
+### 21. Test with service that has availableQuota = -1 (unlimited)
+### Use a subscription for a service with unlimited quota
+### All status changes should work but not affect quota
+
+### ========================================
+### VERIFICATION CHECKLIST
+### ========================================
+
+### After running all tests, verify:
+### ✅ Quota increments when subscription becomes inactive (CANCELLED, EXPIRED, SUSPENDED)
+### ✅ Quota decrements when subscription becomes active (reactivation from any inactive state)
+### ✅ Error thrown when trying to reactivate with exhausted quota
+### ✅ No quota changes for no-op status transitions
+### ✅ No quota changes for services with unlimited quota (null or -1)
+### ✅ All operations are atomic (either both status and quota change, or neither)
+### ✅ Comprehensive logging for all quota operations
+### ✅ Pod management works correctly with status changes
+
+### ========================================
+### DEBUGGING COMMANDS
+### ========================================
+
+### Check application logs for quota management messages
+### tail -f logs/app.log | grep -i quota
+
+### Check database for quota values
+### SELECT id, name, display_name, available_quota FROM service_catalog;
+
+### Check subscription status
+### SELECT id, status, service_id FROM subscription WHERE id = 'subscription-id';

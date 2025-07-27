@@ -1,6 +1,6 @@
 import { expireSubscriptions } from "../services/subscription.service.js";
 import { createPod } from "../services/pod.service.js";
-import { templateParser } from "../templates/template.parser.js";
+import { templateUtils } from "../utils/template.util.js";
 import { prisma } from "../config/database.js";
 import queueManager from "./queue.manager.js";
 import logger from "../utils/logger.util.js";
@@ -304,9 +304,9 @@ export const subscriptionJobs = {
         return { success: true, message: "Pod already exists" };
       }
 
-      // Generate service configuration
-      const serviceConfig = templateParser.parseTemplate(
-        subscription.service.name,
+      // Generate service configuration from database
+      const serviceConfig = templateUtils.generateServiceConfig(
+        subscription.service,
         {
           adminEmail: subscription.user.email,
           adminPassword: generateRandomPassword(),

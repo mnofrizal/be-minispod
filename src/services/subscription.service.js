@@ -5,7 +5,7 @@ import {
   transactionService,
 } from "./billing.service.js";
 import { createPod, stopPod } from "./pod.service.js";
-import { templateParser } from "../templates/template.parser.js";
+import { templateUtils } from "../utils/template.util.js";
 import { notificationJobs } from "../jobs/notification.jobs.js";
 import logger from "../utils/logger.util.js";
 
@@ -161,8 +161,8 @@ const createSubscription = async (userId, serviceId) => {
 
     // 8. Create Kubernetes pod for the service
     try {
-      // Generate service configuration from template
-      const serviceConfig = templateParser.parseTemplate(service.name, {
+      // Generate service configuration from database
+      const serviceConfig = templateUtils.generateServiceConfig(service, {
         adminEmail: subscription.user.email,
         adminPassword: generateRandomPassword(),
         webhookUrl: `https://${subscription.subdomain}.${service.name}.${
@@ -930,14 +930,143 @@ const updateSubscriptionStatus = async (
 
     const previousStatus = subscription.status;
 
-    const updatedSubscription = await prisma.subscription.update({
-      where: { id: subscriptionId },
-      data: { status },
-      include: {
-        user: { select: { id: true, name: true, email: true, role: true } },
-        service: true,
-        serviceInstance: true,
-      },
+    // Use transaction to update subscription status and handle quota atomically
+    const updatedSubscription = await prisma.$transaction(async (tx) => {
+      // Update subscription status
+      const updated = await tx.subscription.update({
+        where: { id: subscriptionId },
+        data: { status },
+        include: {
+          user: { select: { id: true, name: true, email: true, role: true } },
+          service: true,
+          serviceInstance: true,
+        },
+      });
+
+      // Handle quota management for status changes (only if quota is not null and not unlimited)
+      if (
+        subscription.service.availableQuota !== null &&
+        subscription.service.availableQuota !== -1
+      ) {
+        // CANCELLED → ACTIVE: Reduce quota (subscription becomes active again)
+        if (status === "ACTIVE" && previousStatus === "CANCELLED") {
+          // Check if quota is available before reactivating
+          if (subscription.service.availableQuota <= 0) {
+            throw new Error(
+              `Cannot reactivate subscription: Service quota exhausted for ${subscription.service.displayName}`
+            );
+          }
+
+          await tx.serviceCatalog.update({
+            where: { id: subscription.serviceId },
+            data: {
+              availableQuota: {
+                decrement: 1,
+              },
+            },
+          });
+
+          logger.info(
+            `Admin ${adminUserId} reactivated subscription ${subscriptionId}, reduced quota for service ${subscription.service.displayName}`
+          );
+        }
+
+        // ACTIVE → CANCELLED: Restore quota (subscription becomes inactive)
+        else if (status === "CANCELLED" && previousStatus === "ACTIVE") {
+          await tx.serviceCatalog.update({
+            where: { id: subscription.serviceId },
+            data: {
+              availableQuota: {
+                increment: 1,
+              },
+            },
+          });
+
+          logger.info(
+            `Admin ${adminUserId} cancelled subscription ${subscriptionId}, restored quota for service ${subscription.service.displayName}`
+          );
+        }
+
+        // EXPIRED → ACTIVE: Reduce quota (subscription reactivated from expired)
+        else if (status === "ACTIVE" && previousStatus === "EXPIRED") {
+          // Check if quota is available before reactivating
+          if (subscription.service.availableQuota <= 0) {
+            throw new Error(
+              `Cannot reactivate subscription: Service quota exhausted for ${subscription.service.displayName}`
+            );
+          }
+
+          await tx.serviceCatalog.update({
+            where: { id: subscription.serviceId },
+            data: {
+              availableQuota: {
+                decrement: 1,
+              },
+            },
+          });
+
+          logger.info(
+            `Admin ${adminUserId} reactivated expired subscription ${subscriptionId}, reduced quota for service ${subscription.service.displayName}`
+          );
+        }
+
+        // ACTIVE → EXPIRED: Restore quota (subscription expired)
+        else if (status === "EXPIRED" && previousStatus === "ACTIVE") {
+          await tx.serviceCatalog.update({
+            where: { id: subscription.serviceId },
+            data: {
+              availableQuota: {
+                increment: 1,
+              },
+            },
+          });
+
+          logger.info(
+            `Admin ${adminUserId} expired subscription ${subscriptionId}, restored quota for service ${subscription.service.displayName}`
+          );
+        }
+
+        // ACTIVE → SUSPENDED: Restore quota (subscription suspended)
+        else if (status === "SUSPENDED" && previousStatus === "ACTIVE") {
+          await tx.serviceCatalog.update({
+            where: { id: subscription.serviceId },
+            data: {
+              availableQuota: {
+                increment: 1,
+              },
+            },
+          });
+
+          logger.info(
+            `Admin ${adminUserId} suspended subscription ${subscriptionId}, restored quota for service ${subscription.service.displayName}`
+          );
+        }
+
+        // SUSPENDED → ACTIVE: Reduce quota (subscription reactivated from suspended)
+        else if (status === "ACTIVE" && previousStatus === "SUSPENDED") {
+          // Check if quota is available before reactivating
+          if (subscription.service.availableQuota <= 0) {
+            throw new Error(
+              `Cannot reactivate subscription: Service quota exhausted for ${subscription.service.displayName}`
+            );
+          }
+
+          await tx.serviceCatalog.update({
+            where: { id: subscription.serviceId },
+            data: {
+              availableQuota: {
+                decrement: 1,
+              },
+            },
+          });
+
+          logger.info(
+            `Admin ${adminUserId} reactivated suspended subscription ${subscriptionId}, reduced quota for service ${subscription.service.displayName}`
+          );
+        }
+      }
+
+      return updated;
     });
 
     // Handle pod management based on status change
