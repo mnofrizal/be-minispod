@@ -11,6 +11,7 @@ import {
   adminPodAction,
   getOrphanedPods,
   cleanupOrphanedPods,
+  cleanupSingleOrphanedPod,
   debugKubernetesState,
 } from "../../controllers/pod.controller.js";
 import { body, param, query } from "express-validator";
@@ -120,6 +121,37 @@ router.delete(
   ],
   handleValidationErrors,
   cleanupOrphanedPods
+);
+
+/**
+ * @route   DELETE /api/v1/admin/pods/orphaned/:deploymentName/:namespace
+ * @desc    Clean up single orphaned pod
+ * @access  Private (Admin only)
+ */
+router.delete(
+  "/orphaned/:deploymentName/:namespace",
+  adminOnly,
+  [
+    param("deploymentName")
+      .isString()
+      .notEmpty()
+      .withMessage("Deployment name is required"),
+    param("namespace")
+      .isString()
+      .notEmpty()
+      .withMessage("Namespace is required"),
+    body("confirm")
+      .isBoolean()
+      .withMessage("Confirmation must be a boolean")
+      .custom((value) => {
+        if (value !== true) {
+          throw new Error("Must confirm cleanup by setting confirm: true");
+        }
+        return true;
+      }),
+  ],
+  handleValidationErrors,
+  cleanupSingleOrphanedPod
 );
 
 /**

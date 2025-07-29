@@ -2323,6 +2323,93 @@ export const cleanupOrphanedPods = async (options) => {
 };
 
 /**
+ * Clean up single orphaned pod
+ * @param {string} deploymentName - Deployment name to clean up
+ * @param {string} namespace - Namespace of the deployment
+ * @returns {Object} Cleanup result
+ */
+export const cleanupSingleOrphanedPod = async (deploymentName, namespace) => {
+  try {
+    const k8sConfig = getKubernetesConfig();
+    if (!k8sConfig.isReady()) {
+      throw new Error("Kubernetes client not ready");
+    }
+
+    const coreV1Api = k8sConfig.getCoreV1Api();
+    const appsV1Api = k8sConfig.getAppsV1Api();
+    const networkingV1Api = k8sConfig.getNetworkingV1Api();
+
+    // First verify this is actually an orphaned pod
+    const serviceInstance = await prisma.serviceInstance.findFirst({
+      where: {
+        podName: deploymentName,
+        namespace: namespace,
+      },
+    });
+
+    if (serviceInstance) {
+      throw new Error(
+        `Pod ${namespace}/${deploymentName} is not orphaned - it has a database record`
+      );
+    }
+
+    // Verify the deployment exists in Kubernetes
+    try {
+      await appsV1Api.readNamespacedDeployment(deploymentName, namespace);
+    } catch (error) {
+      if (error.response?.statusCode === 404) {
+        throw new Error(
+          `Deployment ${namespace}/${deploymentName} not found in Kubernetes`
+        );
+      }
+      throw error;
+    }
+
+    logger.info(
+      `Cleaning up single orphaned pod: ${namespace}/${deploymentName}`
+    );
+
+    const cleanupResults = {
+      deployments: [],
+      services: [],
+      ingresses: [],
+      errors: [],
+    };
+
+    // Use the existing helper function to clean up the single deployment
+    await cleanupSingleDeployment(
+      deploymentName,
+      namespace,
+      { coreV1Api, appsV1Api, networkingV1Api },
+      cleanupResults
+    );
+
+    logger.info(
+      `Successfully cleaned up orphaned pod: ${namespace}/${deploymentName}`
+    );
+
+    return {
+      deploymentName,
+      namespace,
+      cleanupResults,
+      summary: {
+        deploymentsDeleted: cleanupResults.deployments.length,
+        servicesDeleted: cleanupResults.services.length,
+        ingressesDeleted: cleanupResults.ingresses.length,
+        errors: cleanupResults.errors.length,
+      },
+      message: `Successfully cleaned up orphaned pod ${namespace}/${deploymentName}`,
+    };
+  } catch (error) {
+    logger.error(
+      `Error cleaning up single orphaned pod ${namespace}/${deploymentName}:`,
+      error
+    );
+    throw error;
+  }
+};
+
+/**
  * Helper method to clean up a single deployment and its resources
  */
 export const cleanupSingleDeployment = async (

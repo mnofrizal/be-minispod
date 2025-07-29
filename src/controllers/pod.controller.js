@@ -266,6 +266,49 @@ export const cleanupOrphanedPods = async (req, res, next) => {
 };
 
 /**
+ * Clean up single orphaned pod
+ * DELETE /api/v1/admin/pods/orphaned/:deploymentName/:namespace
+ */
+export const cleanupSingleOrphanedPod = async (req, res, next) => {
+  try {
+    const { deploymentName, namespace } = req.params;
+    const { confirm } = req.body;
+
+    if (!confirm) {
+      return res
+        .status(HTTP_STATUS.BAD_REQUEST)
+        .json(error("Confirmation required. Set 'confirm: true' to proceed."));
+    }
+
+    logger.info(
+      `Admin cleaning up single orphaned pod ${namespace}/${deploymentName} - User: ${req.user.email}`
+    );
+
+    const result = await podService.cleanupSingleOrphanedPod(
+      deploymentName,
+      namespace
+    );
+
+    res
+      .status(HTTP_STATUS.OK)
+      .json(success(result, "Single orphaned pod cleanup completed"));
+  } catch (err) {
+    logger.error("Error cleaning up single orphaned pod:", err);
+    if (err.message.includes("Kubernetes client not ready")) {
+      return res
+        .status(HTTP_STATUS.SERVICE_UNAVAILABLE)
+        .json(error("Kubernetes service temporarily unavailable"));
+    }
+    if (err.message.includes("not found")) {
+      return res
+        .status(HTTP_STATUS.NOT_FOUND)
+        .json(error("Orphaned pod not found"));
+    }
+    next(err);
+  }
+};
+
+/**
  * Debug Kubernetes state (Admin only)
  * GET /api/v1/admin/pods/debug
  */

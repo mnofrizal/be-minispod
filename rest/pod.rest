@@ -32,8 +32,28 @@ Authorization: Bearer {{authToken}}
 GET {{baseUrl}}/admin/pods/orphaned
 Authorization: Bearer {{authToken}}
 
-### Admin - Cleanup orphaned pods
+### Admin - Cleanup orphaned pods (bulk)
 DELETE {{baseUrl}}/admin/pods/orphaned
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "confirm": true
+}
+
+### Admin - Cleanup single orphaned pod
+### Replace 'deployment-name' and 'namespace' with actual values from orphaned pods list
+DELETE {{baseUrl}}/admin/pods/orphaned/deployment-name/namespace
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "confirm": true
+}
+
+### Admin - Cleanup specific orphaned pod example
+### Use actual deployment name and namespace from GET /admin/pods/orphaned response
+DELETE {{baseUrl}}/admin/pods/orphaned/n8n-cmdg67pz-1753289067836/customer-cmdg67pz
 Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
