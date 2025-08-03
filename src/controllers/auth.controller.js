@@ -181,3 +181,28 @@ export const checkAuth = async (req, res) => {
     )
   );
 };
+
+/**
+ * Google OAuth authentication
+ * POST /api/v1/auth/google
+ */
+export const googleOAuth = async (req, res, next) => {
+  try {
+    const result = await authService.googleOAuth(req.body);
+
+    const message = result.isNewUser
+      ? "Account created and logged in successfully"
+      : "Login successful";
+
+    res.json(success(result, message));
+  } catch (err) {
+    if (
+      err.message === "Invalid Google ID token" ||
+      err.message === "Google email not verified" ||
+      err.message === "Account is deactivated"
+    ) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json(authError(err.message));
+    }
+    next(err);
+  }
+};

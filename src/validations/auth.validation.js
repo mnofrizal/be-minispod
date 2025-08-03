@@ -110,6 +110,28 @@ const refreshTokenSchema = Joi.object({
 });
 
 /**
+ * Google OAuth validation schema
+ */
+const googleOAuthSchema = Joi.object({
+  idToken: Joi.string().required().messages({
+    "any.required": "Google ID token is required",
+  }),
+
+  name: Joi.string().min(2).max(50).optional().messages({
+    "string.min": "Name must be at least 2 characters long",
+    "string.max": "Name cannot exceed 50 characters",
+  }),
+
+  email: Joi.string().email().optional().messages({
+    "string.email": "Please provide a valid email address",
+  }),
+
+  picture: Joi.string().uri().optional().messages({
+    "string.uri": "Picture must be a valid URL",
+  }),
+});
+
+/**
  * Generic validation middleware
  * @param {Joi.Schema} schema - Joi validation schema
  * @param {string} property - Request property to validate (body, query, params)
@@ -143,5 +165,6 @@ export {
   changePasswordSchema,
   updateProfileSchema,
   refreshTokenSchema,
+  googleOAuthSchema,
   validate,
 };

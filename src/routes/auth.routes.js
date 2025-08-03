@@ -8,6 +8,7 @@ import {
   changePasswordSchema,
   updateProfileSchema,
   refreshTokenSchema,
+  googleOAuthSchema,
 } from "../validations/auth.validation.js";
 
 const router = express.Router();
@@ -28,6 +29,13 @@ router.post("/login", validate(loginSchema), (req, res, next) => {
   console.log("Login payload:", req.body);
   authController.login(req, res, next);
 });
+
+/**
+ * @route   POST /api/v1/auth/google
+ * @desc    Google OAuth authentication
+ * @access  Public
+ */
+router.post("/google", validate(googleOAuthSchema), authController.googleOAuth);
 
 /**
  * @route   POST /api/v1/auth/refresh

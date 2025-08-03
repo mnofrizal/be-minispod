@@ -15,7 +15,7 @@ async function main() {
       name: "n8n",
       variant: "basic",
       variantDisplayName: "Basic",
-      displayName: "N8N Workflow Automation - Basic",
+      displayName: "N8N - Basic",
       description:
         "Powerful workflow automation tool with visual editor - Basic plan with essential features for small workflows.",
       version: "latest",
@@ -59,7 +59,7 @@ async function main() {
       name: "n8n",
       variant: "plus",
       variantDisplayName: "Plus",
-      displayName: "N8N Workflow Automation - Plus",
+      displayName: "N8N - Plus",
       description:
         "Powerful workflow automation tool with visual editor - Plus plan with advanced features for growing teams.",
       version: "latest",
@@ -109,7 +109,7 @@ async function main() {
       name: "n8n",
       variant: "pro",
       variantDisplayName: "Pro",
-      displayName: "N8N Workflow Automation - Pro",
+      displayName: "N8N - Pro",
       description:
         "Powerful workflow automation tool with visual editor - Pro plan with enterprise features for large teams.",
       version: "latest",

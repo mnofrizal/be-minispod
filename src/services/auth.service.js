@@ -8,6 +8,7 @@ import {
 import logger from "../utils/logger.util.js";
 import { prisma } from "../config/database.js";
 import { USER_ROLES } from "../utils/user-roles.util.js";
+import { OAuth2Client } from "google-auth-library";
 
 /**
  * Register a new user
@@ -327,6 +328,117 @@ export const deactivateAccount = async (userId) => {
     logger.info(`Account deactivated for user: ${user.email}`);
   } catch (error) {
     logger.error("Account deactivation error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Google OAuth authentication
+ * @param {Object} googleData - Google OAuth data
+ * @returns {Promise<Object>} User and tokens
+ */
+export const googleOAuth = async (googleData) => {
+  const { idToken } = googleData;
+
+  try {
+    // Initialize Google OAuth client
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+    // Verify the Google ID token
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload) {
+      throw new Error("Invalid Google ID token");
+    }
+
+    const { email, name, picture, email_verified } = payload;
+
+    if (!email_verified) {
+      throw new Error("Google email not verified");
+    }
+
+    // Check if user already exists
+    let user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (user) {
+      // User exists, check if account is active
+      if (!user.isActive) {
+        throw new Error("Account is deactivated");
+      }
+
+      // Update user info if needed (name, picture could have changed)
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: name || user.name,
+          // You can add a picture field to your User model if needed
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      logger.info(`Google OAuth login for existing user: ${email}`);
+    } else {
+      // Create new user
+      user = await prisma.user.create({
+        data: {
+          name: name || email.split("@")[0], // Use email prefix if name not provided
+          email,
+          password: "", // No password for OAuth users
+          role: USER_ROLES.USER,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      logger.info(`New user created via Google OAuth: ${email}`);
+    }
+
+    // Generate tokens
+    const tokenPayload = {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const accessToken = generateAccessToken(tokenPayload);
+    const refreshToken = generateRefreshToken({ userId: user.id });
+
+    return {
+      user,
+      tokens: {
+        accessToken,
+        refreshToken,
+        expiresIn: process.env.JWT_EXPIRES_IN || "24h",
+      },
+      isNewUser:
+        !user.updatedAt ||
+        user.createdAt.getTime() === user.updatedAt.getTime(),
+    };
+  } catch (error) {
+    logger.error("Google OAuth error:", error);
     throw error;
   }
 };

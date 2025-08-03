@@ -462,6 +462,8 @@ const getUserSubscriptions = async (
               displayName: true,
               monthlyPrice: true,
               dockerImage: true,
+              category: true,
+              icon: true,
             },
           },
           serviceInstance: {
